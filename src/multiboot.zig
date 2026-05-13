@@ -1,5 +1,6 @@
 // https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html
 const console = @import("console.zig");
+const root = @import("root.zig");
 
 const MultibootHeaderTag = extern struct {
     type: u16 align(1),
@@ -19,7 +20,8 @@ const MAGIC = 0xE85250D6;
 const ARCHITECTURE = 0; // i386 (protected mode)
 const HEADER_LENGTH = @sizeOf(MultibootHeader);
 
-export const multiboot align(8) linksection(".multiboot") = MultibootHeader{
+// Cannot be read after boot because this is located in the lower-half.
+pub const multiboot align(8) linksection(".multiboot") = MultibootHeader{
     .magic = MAGIC,
     .architecture = ARCHITECTURE,
     .header_length = HEADER_LENGTH,
@@ -63,10 +65,10 @@ pub var modules: [1]MultibootModuleEntry = undefined;
 pub var modulesCount: usize = 0;
 
 pub fn init(multiboot_info_address: usize) void {
-    var entry_address = multiboot_info_address + 8;
+    var entry_address = root.KERNEL_BASE + multiboot_info_address + 8;
 
     while (true) {
-        const entry: *MultibootTag = @ptrFromInt(entry_address);
+        const entry: *const MultibootTag = @ptrFromInt(entry_address);
         if (entry.type == .end) break;
 
         console.println("[multiboot] Type {}", .{entry.type});

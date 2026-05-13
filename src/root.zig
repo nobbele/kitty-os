@@ -2,6 +2,12 @@ const std = @import("std");
 
 const console = @import("console.zig");
 const main = @import("main.zig");
+const multiboot = @import("multiboot.zig");
+
+comptime {
+    @export(&multiboot.multiboot, .{ .name = "multiboot" });
+    @export(&main.kmain, .{ .name = "kmain" });
+}
 
 pub const os = struct {
     pub const heap = struct {
@@ -23,20 +29,12 @@ fn queryPageSize() usize {
 
 pub const Ring = enum(u2) { kernel = 0, user = 3 };
 pub const PAGE_SIZE: usize = 4096;
+pub const KERNEL_BASE: usize = 0xC0000000;
 
-var stack: [4 * 1024]u8 align(16) linksection(".bss") = undefined;
+pub extern const kernel_end: usize;
 
-export fn _start() callconv(.naked) noreturn {
-    asm volatile (
-        \\ cli
-        \\ movl %[stack_top], %%esp
-        \\ movl %%esp, %%ebp
-        \\ push %%ebx
-        \\ call %[kmain:P]
-        :
-        : [stack_top] "i" (stack[stack.len..].ptr),
-          [kmain] "X" (&main.kmain),
-    );
+pub fn kernelSize() usize {
+    return kernel_end - KERNEL_BASE;
 }
 
 pub const panic = std.debug.FullPanic(kpanic);

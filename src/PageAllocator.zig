@@ -2,6 +2,7 @@ const std = @import("std");
 
 const pmm = @import("arch/pmm.zig");
 const console = @import("console.zig");
+const root = @import("root.zig");
 
 pub const vtable: std.mem.Allocator.VTable = .{
     .alloc = alloc,
@@ -23,13 +24,13 @@ fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: us
         return null;
     }
 
-    return @ptrFromInt(addr.?);
+    return @ptrFromInt(root.KERNEL_BASE + addr.?);
 }
 
 fn free(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
     _ = ctx;
     _ = ret_addr;
     _ = alignment;
-    const addr = @intFromPtr(memory.ptr);
+    const addr = @intFromPtr(memory.ptr) - root.KERNEL_BASE;
     pmm.free(addr, memory.len);
 }

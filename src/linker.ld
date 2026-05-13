@@ -1,23 +1,32 @@
 ENTRY(_start)
 
 SECTIONS {
-	. = 2M;
+	. = 1M;
 
-	.text : ALIGN(8K) {
-		KEEP(*(.multiboot))
+	.boot.text : {
+		*(.multiboot)
+		*(.boot.text)
+	}
+
+	. += 0xC0000000;
+	/* Add a symbol that indicates the start address of the kernel. */
+	.text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000)
+	{
 		*(.text)
 	}
-
-	.rodata : ALIGN(8K) {
+	.rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xC0000000)
+	{
 		*(.rodata)
 	}
-
-	.data : ALIGN(8K) {
+	.data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000)
+	{
 		*(.data)
 	}
-
-	.bss : ALIGN(8K) {
+	.bss ALIGN (4K) : AT (ADDR (.bss) - 0xC0000000)
+	{
 		*(COMMON)
 		*(.bss)
+		*(.stack)
 	}
+	_kernel_end = .;
 }

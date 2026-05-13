@@ -7,7 +7,7 @@ const VGA_SIZE = VGA_WIDTH * VGA_HEIGHT;
 var g_row: usize = 0;
 var g_column: usize = 0;
 var g_color: Color = .init(.light_gray, .black);
-var g_buffer = @as([*]volatile u16, @ptrFromInt(0xB8000));
+var g_buffer = @as([*]volatile u16, @ptrFromInt(0xC03FF000));
 
 pub const ColorType = enum(u4) {
     black = 0,

@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     kernel.setLinkerScript(b.path("src/linker.ld"));
+    kernel.root_module.addAssemblyFile(b.path("src/boot.s"));
     b.installArtifact(kernel);
 
     const kernel_check = b.addExecutable(.{
@@ -69,6 +70,7 @@ pub fn build(b: *std.Build) void {
     make_iso_step.dependOn(&xorriso.step);
 
     const enable_debugger = b.option(bool, "debugger", "Enable debugger mode in QEMU") orelse false;
+    const enable_int = b.option(bool, "int", "Enable interrupt logging in QEMU") orelse false;
 
     const qemu = b.addSystemCommand(&.{
         // zig fmt: off
@@ -79,14 +81,17 @@ pub fn build(b: *std.Build) void {
         "-boot", "d",
         "-no-reboot",
         "-no-shutdown",
-        // "-d", "int",
-        // "-s", "-S",
         // "-serial", "stdio",
     });
     
     if (enable_debugger) {
         qemu.addArgs(&.{"-s", "-S"});
     }
+
+    if (enable_int) {
+        qemu.addArgs(&.{"-d", "int"});
+    }
+
     // zig fmt: on
     qemu.step.dependOn(make_iso_step);
 
