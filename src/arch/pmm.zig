@@ -2,8 +2,7 @@ const std = @import("std");
 
 const console = @import("../console.zig");
 const multiboot = @import("../multiboot.zig");
-
-pub const PAGE_SIZE = 4096;
+const root = @import("../root.zig");
 
 const Map = struct { address: usize, size: usize };
 
@@ -37,7 +36,7 @@ fn initBitmap(bitmap_address: usize, memory_maps: []Map) void {
                 unit |= mask;
             }
 
-            address += PAGE_SIZE;
+            address += root.PAGE_SIZE;
         }
 
         bitmap_unit.* = unit;
@@ -97,9 +96,9 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
         }
     }
 
-    total_pages = total_size / PAGE_SIZE;
+    total_pages = total_size / root.PAGE_SIZE;
     bitmap_size = divRoundUp(total_pages, @sizeOf(BitmapUnit));
-    bitmap_size_pages = divRoundUp(bitmap_size, PAGE_SIZE);
+    bitmap_size_pages = divRoundUp(bitmap_size, root.PAGE_SIZE);
 
     if (bitmap_map == null) {
         @panic("[pmm] not enough memory to initialize bitmap");
@@ -116,7 +115,7 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
 }
 
 pub fn alloc(size: usize) ?usize {
-    const req_pages = divRoundUp(size, PAGE_SIZE);
+    const req_pages = divRoundUp(size, root.PAGE_SIZE);
     var satisfied_pages: usize = 0;
 
     var address: usize = 0;
@@ -136,7 +135,7 @@ pub fn alloc(size: usize) ?usize {
                 unit.* |= mask;
             } else {
                 // Either we still didn't find a free page, or the next page is allocated.
-                address += PAGE_SIZE;
+                address += root.PAGE_SIZE;
                 satisfied_pages = 0;
             }
         }
@@ -147,8 +146,8 @@ pub fn alloc(size: usize) ?usize {
 }
 
 pub fn free(address: usize, size: usize) void {
-    const start_page = address / PAGE_SIZE;
-    const page_count = divRoundUp(size, PAGE_SIZE);
+    const start_page = address / root.PAGE_SIZE;
+    const page_count = divRoundUp(size, root.PAGE_SIZE);
 
     if (page_count >= bitmap.len) {
         std.debug.panic("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });

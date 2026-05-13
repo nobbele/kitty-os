@@ -13,7 +13,16 @@ pub const os = struct {
     };
 };
 
+pub const std_options: std.Options = .{
+    .queryPageSize = queryPageSize,
+};
+
+fn queryPageSize() usize {
+    return PAGE_SIZE;
+}
+
 pub const Ring = enum(u2) { kernel = 0, user = 3 };
+pub const PAGE_SIZE: usize = 4096;
 
 var stack: [4 * 1024]u8 align(16) linksection(".bss") = undefined;
 
