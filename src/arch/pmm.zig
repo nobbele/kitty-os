@@ -1,0 +1,163 @@
+const std = @import("std");
+
+const console = @import("../console.zig");
+const multiboot = @import("../multiboot.zig");
+
+pub const PAGE_SIZE = 4096;
+
+const Map = struct { address: usize, size: usize };
+
+const BitmapUnit = u8;
+var bitmap: []allowzero volatile BitmapUnit = undefined;
+
+pub var total_size: usize = 0;
+pub var total_pages: usize = 0;
+pub var pages_in_use: usize = 0;
+
+var bitmap_size: usize = 0;
+var bitmap_size_pages: usize = 0;
+
+fn initBitmap(bitmap_address: usize, memory_maps: []Map) void {
+    bitmap = @as([*]allowzero volatile BitmapUnit, @ptrFromInt(bitmap_address))[0..bitmap_size];
+
+    var address: usize = 0;
+
+    for (bitmap) |*bitmap_unit| {
+        var unit: BitmapUnit = 0;
+
+        for (0..@sizeOf(BitmapUnit)) |bit| {
+            const address_free = for (memory_maps) |map| {
+                if (address >= map.address and address <= map.address + map.size) {
+                    break true;
+                }
+            } else false;
+
+            const mask: u8 = @intCast(@as(u16, 1) << @as(u4, @intCast(bit)));
+            if (!address_free) {
+                unit |= mask;
+            }
+
+            address += PAGE_SIZE;
+        }
+
+        bitmap_unit.* = unit;
+    }
+
+    var satisfied_pages: usize = 0;
+
+    // Allocate the pages used for storing the bitmap itself.
+    for (bitmap) |*unit| {
+        for (0..@sizeOf(BitmapUnit)) |bit| {
+            // We have allocated the required number of pages, we can safely return the buffer now.
+            if (satisfied_pages == bitmap_size_pages) return;
+
+            const mask: u8 = @intCast(@as(u16, 1) << @as(u4, @intCast(bit)));
+            if ((unit.* & mask) == 0) {
+                // We found a free page
+                satisfied_pages += 1;
+                unit.* |= mask;
+            } else {
+                // This should never happen
+                std.debug.panic("[pmm,bitmap] found allocated page while trying to allocate bitmap", .{});
+                return;
+            }
+        }
+    }
+}
+
+// https://github.com/limine-bootloader/limine/blob/886523359c85aa10691e6b82229c91f31f21a04f/common/lib/misc.h#L66
+fn divRoundUp(a: usize, b: usize) usize {
+    return (a + (b - 1)) / b;
+}
+
+pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEntry) void {
+    var buffer: [1024]u8 align(16) = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+
+    const memory_maps = allocator.alloc(Map, entries.len) catch unreachable;
+    defer allocator.free(memory_maps);
+
+    var number_of_maps: usize = 0;
+    var bitmap_map: ?Map = null;
+
+    for (entries) |*entry| {
+        // A value of 1 indicates available RAM
+        if (entry.type == 1 and entry.address <= max_memory_address) {
+            const size: usize = @intCast(entry.length);
+            const map = Map{ .address = @intCast(entry.address), .size = size };
+
+            memory_maps[number_of_maps] = map;
+            number_of_maps += 1;
+            total_size += size;
+
+            if (bitmap_map == null and bitmap_size <= size) {
+                bitmap_map = map;
+            }
+        }
+    }
+
+    total_pages = total_size / PAGE_SIZE;
+    bitmap_size = divRoundUp(total_pages, @sizeOf(BitmapUnit));
+    bitmap_size_pages = divRoundUp(bitmap_size, PAGE_SIZE);
+
+    if (bitmap_map == null) {
+        @panic("[pmm] not enough memory to initialize bitmap");
+    }
+
+    console.println("[pmm] Available memory: {Bi:.1}", .{total_size});
+    console.println("[pmm] Reserved for bitmap: {Bi:.1}", .{bitmap_size});
+
+    console.println("[pmm,bitmap] init", .{});
+    initBitmap(bitmap_map.?.address, memory_maps[0..number_of_maps]);
+    console.println("[pmm,bitmap] OK", .{});
+
+    pages_in_use = bitmap_size_pages;
+}
+
+pub fn alloc(size: usize) ?usize {
+    const req_pages = divRoundUp(size, PAGE_SIZE);
+    var satisfied_pages: usize = 0;
+
+    var address: usize = 0;
+
+    for (bitmap) |*unit| {
+        for (0..@sizeOf(BitmapUnit)) |bit| {
+            // We have allocated the required number of pages, we can safely return the buffer now.
+            if (satisfied_pages == req_pages) {
+                pages_in_use += satisfied_pages;
+                return address;
+            }
+
+            const mask = @as(u8, @intCast(@as(u16, 1) << @as(u4, @intCast(bit))));
+            if ((unit.* & mask) == 0) {
+                // We found a free page!
+                satisfied_pages += 1;
+                unit.* |= mask;
+            } else {
+                // Either we still didn't find a free page, or the next page is allocated.
+                address += PAGE_SIZE;
+                satisfied_pages = 0;
+            }
+        }
+    }
+
+    std.debug.panic("[pmm] Failed allocate {Bi:.1}", .{size});
+    return null;
+}
+
+pub fn free(address: usize, size: usize) void {
+    const start_page = address / PAGE_SIZE;
+    const page_count = divRoundUp(size, PAGE_SIZE);
+
+    if (page_count >= bitmap.len) {
+        std.debug.panic("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
+    }
+
+    for (start_page..start_page + page_count) |page| {
+        const unit = page / @sizeOf(BitmapUnit);
+        const bit = page % @sizeOf(BitmapUnit);
+        const mask = (@as(u8, @intCast(@as(u16, 1) << @as(u4, @intCast(bit)))));
+        bitmap[unit] &= ~mask;
+    }
+}
