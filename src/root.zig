@@ -31,6 +31,12 @@ pub const Ring = enum(u2) { kernel = 0, user = 3 };
 pub const PAGE_SIZE: usize = 4096;
 pub const KERNEL_BASE: usize = 0xC0000000;
 
+pub const KERNEL_CS: u8 = 1 << 3; // 0x8
+pub const KERNEL_DS: u8 = 2 << 3; // 0x10
+pub const USER_CS: u8 = (3 << 3) | 3; // 0x1B
+pub const USER_DS: u8 = (4 << 3) | 3; // 0x23
+pub const TSS: u8 = (5 << 3) | 3;
+
 pub extern const kernel_end: usize;
 
 pub fn kernelSize() usize {

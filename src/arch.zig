@@ -25,8 +25,6 @@ pub fn init() !void {
 
     asm volatile ("sti");
 
-    asm volatile ("int3");
-
     console.println("[ps2] init", .{});
     ps2.init();
 }

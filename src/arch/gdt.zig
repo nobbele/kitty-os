@@ -29,14 +29,17 @@ const SegmentAccess = packed struct(u8) {
     /// For code selectors: Conforming bit.
     /// - If false, code in this segment can only be executed from the ring set in DPL.
     /// - If true, code in this segment can be executed from an equal or lower privilege level.
-    /// For example, code in ring 3 can far-jump to conforming code in a ring 2 segment. The DPL field represent the highest privilege level that is allowed to execute the segment. For example, code in ring 0 cannot far-jump to a conforming code segment where DPL is 2, while code in ring 2 and 3 can. Note that the privilege level remains the same, ie. a far-jump from ring 3 to a segment with a DPL of 2 remains in ring 3 after the jump.
-    dc: bool,
+    /// For example, code in ring 3 can far-jump to conforming code in a ring 2 segment.
+    /// The DPL field represent the highest privilege level that is allowed to execute the segment.
+    /// For example, code in ring 0 cannot far-jump to a conforming code segment where DPL is 2, while code in ring 2 and 3 can.
+    /// Note that the privilege level remains the same, ie. a far-jump from ring 3 to a segment with a DPL of 2 remains in ring 3 after the jump.
+    dc: bool = false,
     /// - If false, the descriptor defines a data segment.
     /// - If true, it defines a code segment which can be executed from.
     exec: bool,
     /// - If false, the descriptor defines a system segment (eg. a Task State Segment).
     /// - If true, it defines a code or data segment.
-    desc_type: bool = true,
+    desc_type: enum(u1) { system = 0, code_data = 1 } = .code_data,
     /// Contains the CPU Privilege level of the segment.
     ring: root.Ring,
     // Must be true for any valid segment.
@@ -45,24 +48,28 @@ const SegmentAccess = packed struct(u8) {
     pub const kernel_code: Self = .{
         .ring = .kernel,
         .exec = true,
-        .dc = false,
     };
     pub const kernel_data: Self = .{
         .ring = .kernel,
         .exec = false,
-        .dc = false,
     };
     pub const user_code: Self = .{
         .ring = .user,
         .exec = true,
-        .dc = false,
     };
     pub const user_data: Self = .{
         .ring = .user,
         .exec = false,
-        .dc = false,
     };
 };
+
+test "segment access" {
+    const expect = std.testing.expect;
+    try expect(@as(u8, @bitCast(SegmentAccess.kernel_code)) == 0x9A);
+    try expect(@as(u8, @bitCast(SegmentAccess.kernel_data)) == 0x92);
+    try expect(@as(u8, @bitCast(SegmentAccess.user_code)) == 0xFA);
+    try expect(@as(u8, @bitCast(SegmentAccess.user_data)) == 0xF2);
+}
 
 const Flags = packed struct(u4) {
     reserved: u1 = 0,
@@ -75,21 +82,15 @@ const Flags = packed struct(u4) {
     granularity: enum(u1) { byte = 0, page = 1 } = .page,
 };
 
-test "segment access" {
-    const expect = std.testing.expect;
-    try expect(@as(u8, @bitCast(SegmentAccess.kernel_code)) == 0x9A);
-    try expect(@as(u8, @bitCast(SegmentAccess.kernel_data)) == 0x92);
-    try expect(@as(u8, @bitCast(SegmentAccess.user_code)) == 0xFA);
-    try expect(@as(u8, @bitCast(SegmentAccess.user_data)) == 0xF2);
-}
+const TSSEntry = packed struct(u800) { prev: u32, esp0: u32, ss0: u32, unused: u704 };
 
 const GDTR = packed struct(u48) { size: u16, offset: usize };
 const GDTEntry = packed struct(u64) {
     limit_low: u16,
     base_low: u24,
-    access: u8,
+    access: SegmentAccess,
     limit_high: u4,
-    flags: u4,
+    flags: Flags,
     base_high: u8,
 
     pub fn init(self: *GDTEntry, base: u32, limit: u20, access: SegmentAccess) void {
@@ -98,8 +99,27 @@ const GDTEntry = packed struct(u64) {
             .base_high = @truncate(base >> 24),
             .limit_low = @truncate(limit),
             .limit_high = @truncate(limit >> 16),
-            .flags = @bitCast(Flags{}),
-            .access = @bitCast(access),
+            .access = access,
+            .flags = .{},
+        };
+    }
+
+    pub fn init_tss(self: *GDTEntry, entry: *TSSEntry) void {
+        const base = @intFromPtr(entry);
+        const limit = @sizeOf(TSSEntry);
+        self.* = .{
+            .base_low = @truncate(base),
+            .base_high = @truncate(base >> 24),
+            .limit_low = @truncate(limit),
+            .limit_high = @truncate(limit >> 16),
+            .access = .{
+                .accessed = true, // With a system entry (`code_data_segment` = 0), 1 indicates TSS and 0 indicates LDT
+                .rw = false, // For a TSS, indicates busy (1) or not busy (0)
+                .exec = true, // For a TSS, 1 indicates 32-bit (1) or 16-bit (0).
+                .desc_type = .system, // // indicates TSS/LDT (see also `accessed`)
+                .ring = .kernel,
+            },
+            .flags = .{ .granularity = .byte },
         };
     }
 
@@ -112,30 +132,51 @@ const GDTEntry = packed struct(u64) {
     }
 };
 
-var gdt: [3]GDTEntry align(16) linksection(".bss") = undefined;
+var gdt: [6]GDTEntry align(16) linksection(".bss") = undefined;
+var tss: TSSEntry align(16) = undefined;
 
 pub fn init() !void {
     gdt[0].init_null();
 
     // First 3 bits in the segment selector are ignored
-    gdt[1].init_flat(.kernel_code); // 0x8
-    gdt[2].init_flat(.kernel_data); // 0x10
+    gdt[root.KERNEL_CS >> 3].init_flat(.kernel_code);
+    gdt[root.KERNEL_DS >> 3].init_flat(.kernel_data);
+    gdt[root.USER_CS >> 3].init_flat(.user_code);
+    gdt[root.USER_DS >> 3].init_flat(.user_data);
+    gdt[root.TSS >> 3].init_tss(&tss);
 
     loadGDT(.{
         .offset = @intFromPtr(&gdt),
         .size = @intCast(@sizeOf(GDTEntry) * gdt.len - 1),
     });
 
-    console.println("[gdt] Kernel code = 0x08", .{});
-    console.println("[gdt] Kernel data = 0x10", .{});
+    @memset(@as([*]u8, @ptrCast(&tss))[0..@sizeOf(TSSEntry)], 0);
+
+    tss.ss0 = root.KERNEL_DS;
+    asm volatile (
+        \\ mov %[tss], %%ax
+        \\ ltr %%ax
+        :
+        : [tss] "i" (root.TSS),
+        : .{ .ax = true });
+
+    console.println("[gdt] Kernel code = 0x{X}", .{root.KERNEL_CS});
+    console.println("[gdt] Kernel data = 0x{X}", .{root.KERNEL_DS});
+    console.println("[gdt] User code = 0x{X}", .{root.USER_CS});
+    console.println("[gdt] User data = 0x{X}", .{root.USER_DS});
+    console.println("[gdt] Task segment = 0x{X}", .{root.TSS});
 }
 
-pub fn loadGDT(gdtr: GDTR) void {
+pub fn setTaskKernelStack(esp: *const u8) void {
+    tss.esp0 = @intFromPtr(esp);
+}
+
+fn loadGDT(gdtr: GDTR) void {
     asm volatile (
         \\ lgdt (%[gdtr])
-        \\ ljmp $0x08, $reload_cs
+        \\ ljmp %[kernel_cs], $reload_cs
         \\ reload_cs:
-        \\ mov $0x10, %ax
+        \\ mov %[kernel_ds], %ax
         \\ mov %ax, %ds
         \\ mov %ax, %es
         \\ mov %ax, %fs
@@ -143,5 +184,7 @@ pub fn loadGDT(gdtr: GDTR) void {
         \\ mov %ax, %ss
         :
         : [gdtr] "r" (&gdtr),
+          [kernel_cs] "i" (root.KERNEL_CS),
+          [kernel_ds] "i" (root.KERNEL_DS),
     );
 }

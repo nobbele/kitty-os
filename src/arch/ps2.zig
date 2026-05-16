@@ -12,7 +12,7 @@ var kbd_write: usize = 0;
 var kbd_read: usize = 0;
 
 pub fn init() void {
-    interrupts.register_hardware_interrupt(1, keyboardInterrupt);
+    interrupts.registerHardwareInterrupt(1, keyboardInterrupt);
 }
 
 fn keyboardInterrupt() void {

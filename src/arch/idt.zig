@@ -47,28 +47,22 @@ const IDTGate = packed struct(u64) {
     }
 };
 
-const InterruptStackFrame = extern struct {
-    ip: usize,
-    cs: usize,
-    flags: usize,
-};
-
 inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
     if (has_err) {
         const S = struct {
-            fn handler(frame: *InterruptStackFrame, code: usize) callconv(.{ .x86_interrupt = .{} }) void {
-                const cast: *InterruptStackFrame = @ptrCast(frame);
+            fn handler(frame: *interrupts.InterruptStackFrame, code: usize) callconv(.{ .x86_interrupt = .{} }) void {
+                const cast: *interrupts.InterruptStackFrame = @ptrCast(frame);
                 _ = cast; // autofix
-                interrupts.handler(vec, code);
+                interrupts.handler(frame, vec, code);
             }
         };
         return @ptrCast(&S.handler);
     } else {
         const S = struct {
-            fn handler(frame: *InterruptStackFrame) callconv(.{ .x86_interrupt = .{} }) void {
-                const cast: *InterruptStackFrame = @ptrCast(frame);
+            fn handler(frame: *interrupts.InterruptStackFrame) callconv(.{ .x86_interrupt = .{} }) void {
+                const cast: *interrupts.InterruptStackFrame = @ptrCast(frame);
                 _ = cast; // autofix
-                interrupts.handler(vec, 0);
+                interrupts.handler(frame, vec, 0);
             }
         };
         return @ptrCast(&S.handler);

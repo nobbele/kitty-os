@@ -7,10 +7,15 @@ const pmm = @import("pmm.zig");
 const PAGE_DIRECTORY_SIZE: u32 = root.PAGE_SIZE / @sizeOf(u32);
 const PAGE_TABLE_SIZE: u32 = root.PAGE_SIZE / @sizeOf(u32);
 
+pub const Access = enum(u1) {
+    kernel = 0,
+    user = 1,
+};
+
 const PageDirectoryFlags = packed struct(u12) {
     present: bool,
     writable: bool,
-    access: enum(u1) { supervisor = 0, user = 1 },
+    access: Access,
     write_through: bool = false,
     cache_disabled: bool = false,
     accessed: bool = false,
@@ -27,7 +32,7 @@ const PageDirectoryEntry = packed struct(u32) {
 const PageTableFlags = packed struct(u12) {
     present: bool,
     writable: bool,
-    access: enum(u1) { supervisor = 0, user = 1 },
+    access: Access,
     write_through: bool = false,
     cache_disabled: bool = false,
     accessed: bool = false,
@@ -60,10 +65,10 @@ pub fn init() !void {
     for (0..page_count) |page_no| {
         const virt = root.KERNEL_BASE + (page_no * root.PAGE_SIZE);
         const phys = 0x0 + (page_no * root.PAGE_SIZE);
-        try map(virt, phys);
+        try map(virt, phys, .{});
     }
 
-    try map(0xC03FF000, 0x000B8000);
+    try map(0xC03FF000, 0x000B8000, .{});
 
     console.println("[mmu] Loading new page tables", .{});
     reloadPages();
@@ -73,7 +78,12 @@ const MappingError = error{
     UnalignedAddress,
 };
 
-pub fn map(virt: usize, phys: usize) !void {
+pub const MappingOptions = struct {
+    access: Access = .kernel,
+    writable: bool = true,
+};
+
+pub fn map(virt: usize, phys: usize, opts: MappingOptions) !void {
     if (!std.mem.isAligned(virt, root.PAGE_SIZE) or !std.mem.isAligned(phys, root.PAGE_SIZE))
         return MappingError.UnalignedAddress;
 
@@ -88,8 +98,8 @@ pub fn map(virt: usize, phys: usize) !void {
         table_entry.address_high = @truncate(table_phys >> 12);
         table_entry.flags = .{
             .present = true,
-            .writable = true,
-            .access = .supervisor,
+            .writable = opts.writable,
+            .access = opts.access,
         };
     }
 
@@ -100,7 +110,7 @@ pub fn map(virt: usize, phys: usize) !void {
     if (page_entry.flags.present)
         @panic("Page for virtual VGA address is occupied");
 
-    page_entry.flags = .{ .present = true, .writable = true, .access = .supervisor };
+    page_entry.flags = .{ .present = true, .writable = opts.writable, .access = opts.access };
     page_entry.address_high = @truncate(phys >> 12);
 }
 
