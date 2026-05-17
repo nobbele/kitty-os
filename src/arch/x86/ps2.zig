@@ -1,4 +1,4 @@
-const console = @import("../console.zig");
+const console = @import("../../console.zig");
 const interrupts = @import("interrupts.zig");
 const pic = @import("pic.zig");
 const port = @import("port.zig");
@@ -12,10 +12,10 @@ var kbd_write: usize = 0;
 var kbd_read: usize = 0;
 
 pub fn init() void {
-    interrupts.registerHardwareInterrupt(1, keyboardInterrupt);
+    interrupts.registerIrq(1, keyboardIrq);
 }
 
-fn keyboardInterrupt() void {
+fn keyboardIrq() void {
     if (port.inb(STATUS_PORT) & 1 == 0)
         return;
 

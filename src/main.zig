@@ -1,9 +1,9 @@
 const std = @import("std");
 
 const arch = @import("arch.zig");
-const gdt = @import("arch/gdt.zig");
-const mmu = @import("arch/mmu.zig");
-const pmm = @import("arch/pmm.zig");
+const gdt = @import("arch/x86/gdt.zig");
+const mmu = @import("arch/x86/mmu.zig");
+const pmm = @import("arch/x86/pmm.zig");
 const console = @import("console.zig");
 const multiboot = @import("multiboot.zig");
 const root = @import("root.zig");
@@ -17,8 +17,6 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
 
     arch.init() catch unreachable;
 
-    console.println("{*}", .{multiboot.modules[0].data});
-
     // mmu.map(0x100_000, @intFromPtr(multiboot.modules[0].data.ptr)) catch unreachable;
 
     // Identity map for simplicity
@@ -30,7 +28,6 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
     const stack_top_virt = root.KERNEL_BASE - 4;
     const stack_start_virt = stack_top_virt - stack_size;
 
-    console.println("virt: {X}-{X}", .{ stack_start_virt, stack_top_virt });
     if (!std.mem.isAligned(stack_start_virt, root.PAGE_SIZE))
         @panic("Virtual start of for stack must be aligned to page");
 
@@ -38,19 +35,19 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
         @panic("Physical start of stack must be aligned to page");
 
     const stack_pages = std.math.divCeil(usize, stack_size, root.PAGE_SIZE) catch unreachable;
-    console.println("{}", .{stack_pages});
 
     for (0..stack_pages) |stack_page| {
         const virt = stack_start_virt + stack_page * root.PAGE_SIZE;
         const phys = stack_start_phys + stack_page * root.PAGE_SIZE;
-        console.println("{X}-{X} mapped to {X}-{X}", .{ virt, virt + root.PAGE_SIZE - 1, phys, phys + root.PAGE_SIZE - 1 });
         mmu.map(virt, phys, .{ .access = .user }) catch unreachable;
     }
 
-    console.println("{?X}", .{mmu.virtualToPhysical(0xBFFFFFFB)});
-
     for (multiboot.modules) |module| {
-        console.println("{X} {Bi:.1}", .{ module.data, module.data.len });
+        console.println("code: {X} {Bi:.1}", .{ module.data, module.data.len });
+
+        gdt.setTaskKernelStack(asm volatile ("mov %%esp, %[esp]"
+            : [esp] "=r" (-> usize),
+        ));
 
         asm volatile (
             \\ movw %[ds], %%ax

@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const console = @import("../console.zig");
-const multiboot = @import("../multiboot.zig");
-const root = @import("../root.zig");
+const console = @import("../../console.zig");
+const multiboot = @import("../../multiboot.zig");
+const root = @import("../../root.zig");
 
 const Map = struct { address: usize, size: usize };
 

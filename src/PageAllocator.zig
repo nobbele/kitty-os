@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const pmm = @import("arch/pmm.zig");
+const pmm = @import("arch/x86/pmm.zig");
 const console = @import("console.zig");
 const root = @import("root.zig");
 

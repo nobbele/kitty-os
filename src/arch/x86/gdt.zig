@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const console = @import("../console.zig");
-const root = @import("../root.zig");
+const console = @import("../../console.zig");
+const root = @import("../../root.zig");
 
 const SegmentAccess = packed struct(u8) {
     const Self = @This();
@@ -167,8 +167,8 @@ pub fn init() !void {
     console.println("[gdt] Task segment = 0x{X}", .{root.TSS});
 }
 
-pub fn setTaskKernelStack(esp: *const u8) void {
-    tss.esp0 = @intFromPtr(esp);
+pub fn setTaskKernelStack(esp: usize) void {
+    tss.esp0 = esp;
 }
 
 fn loadGDT(gdtr: GDTR) void {
