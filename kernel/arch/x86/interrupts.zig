@@ -9,7 +9,7 @@ const mmu = @import("mmu.zig");
 const pic = @import("pic.zig");
 const vmm = @import("vmm.zig");
 
-pub const IrqHandler = *const fn () void;
+pub const IrqHandler = *const fn (frame: *idt.InterruptFrame) void;
 
 var irq_handlers = std.mem.zeroes([pic.VEC_END - pic.VEC_START]?IrqHandler);
 
@@ -60,9 +60,9 @@ pub fn handler(frame: *idt.InterruptFrame, vec: u8, code: u32) void {
         pic.VEC_START...(pic.VEC_END - 1) => {
             const irq = vec - pic.VEC_START;
             if (irq_handlers[irq]) |h| {
-                h();
+                h(frame);
             } else if (comptime builtin.mode != .ReleaseFast) {
-                @panic("No IRQ handler registered");
+                std.debug.panic("No handler registered for IRQ {}", .{irq});
             }
             pic.sendEoi(vec);
         },

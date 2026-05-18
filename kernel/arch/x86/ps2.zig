@@ -1,5 +1,6 @@
 const console = @import("../../console.zig");
 const keyboard = @import("../../keyboard.zig");
+const idt = @import("idt.zig");
 const interrupts = @import("interrupts.zig");
 const pic = @import("pic.zig");
 const port = @import("port.zig");
@@ -12,7 +13,9 @@ pub fn init() void {
     interrupts.registerIrq(1, keyboardIrq);
 }
 
-fn keyboardIrq() void {
+fn keyboardIrq(frame: *idt.InterruptFrame) void {
+    _ = frame;
+
     if (port.inb(STATUS_PORT) & 1 == 0)
         return;
 

@@ -9,6 +9,7 @@ const console = @import("console.zig");
 const fs = @import("filesystem.zig");
 const multiboot = @import("multiboot.zig");
 const root = @import("root.zig");
+const scheduler = @import("scheduler.zig");
 const shell = @import("shell.zig");
 
 pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noreturn {
@@ -23,31 +24,12 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
     fs.init() catch unreachable;
 
     console.println("Executing usermode program", .{});
-    // exec();
+    // // exec();
     execElf() catch |e| std.debug.panic("Failed to execute ELF: {}", .{e});
 
     console.println("[shell] start", .{});
     shell.run();
 }
-
-const Task = struct {
-    const KERNEL_STACK_SIZE = 0x2000;
-
-    kernel_stack: [KERNEL_STACK_SIZE]u8 align(16) = undefined,
-    user_stack: Stack,
-    address_space: vmm.AddressSpace,
-
-    pub fn init() !Task {
-        return .{
-            .user_stack = try setupStack(),
-            .address_space = try vmm.AddressSpace.init(),
-        };
-    }
-
-    pub fn kernelStackTop(self: *Task) usize {
-        return @intFromPtr(&self.kernel_stack) + KERNEL_STACK_SIZE;
-    }
-};
 
 fn execElf() !void {
     const module = &multiboot.modules[1];
@@ -64,8 +46,8 @@ fn execElf() !void {
     const section_headers = section_headers_ptr[0..header.shnum];
     _ = section_headers; // autofix
 
-    const task = try std.heap.page_allocator.create(Task);
-    task.* = try Task.init();
+    const task = try std.heap.page_allocator.create(scheduler.Task);
+    task.* = try scheduler.Task.init();
 
     for (program_headers) |ph| {
         switch (ph.type) {
@@ -90,12 +72,30 @@ fn execElf() !void {
     }
 
     gdt.setTaskKernelStack(task.kernelStackTop());
-    console.println("Jumping to usermode", .{});
+    task.frame = .{
+        .eax = 0,
+        .ebx = 0,
+        .ecx = 0,
+        .edx = 0,
+        .edi = 0,
+        .esi = 0,
+        .ebp = 0,
 
-    const entry = header.entry;
-    const esp = task.user_stack.virt_top;
+        .eip = header.entry,
+        .cs = root.USER_CS,
+        .flags = 0x200,
+        .esp = task.user_stack.virt_top,
+        .ss = root.USER_DS,
+    };
 
-    task.address_space.load();
+    console.println("Adding task to scheduler", .{});
+    asm volatile ("cli");
+    try scheduler.addTask(task);
+    const eip = task.frame.eip;
+    const esp = task.frame.esp;
+    const flags = task.frame.flags;
+
+    scheduler.switchTo(task);
     asm volatile (
         \\ mov %[ds], %%ds
         \\ mov %[ds], %%es
@@ -104,42 +104,15 @@ fn execElf() !void {
         \\
         \\ pushl %[ds] # ss
         \\ pushl %[esp]
-        \\ pushl $0x200
+        \\ pushl %[flags]
         \\ pushl %[cs]
         \\ pushl %[eip]
         \\ iret
         :
         : [ds] "r" (@as(u32, root.USER_DS)),
           [esp] "r" (esp),
+          [flags] "r" (flags),
           [cs] "i" (root.USER_CS),
-          [eip] "r" (entry),
+          [eip] "r" (eip),
     );
-}
-
-const Stack = struct {
-    phys_start: usize,
-    virt_top: usize,
-};
-
-fn setupStack() !Stack {
-    const size = 2 * 4096 - 4;
-    const phys = pmm.alloc(size) orelse return error.OutOfMemory;
-    const virt_top = root.KERNEL_BASE - 4;
-    const virt_start = virt_top - size;
-
-    if (!std.mem.isAligned(virt_start, root.PAGE_SIZE))
-        @panic("Virtual start of for stack must be aligned to page");
-
-    if (!std.mem.isAligned(phys, root.PAGE_SIZE))
-        @panic("Physical start of stack must be aligned to page");
-
-    const page_count = std.math.divCeil(usize, size, root.PAGE_SIZE) catch unreachable;
-
-    for (0..page_count) |stack_page| {
-        const page_virt = virt_start + stack_page * root.PAGE_SIZE;
-        const page_phys = phys + stack_page * root.PAGE_SIZE;
-        try vmm.kernel_address_space.map(page_virt, page_phys, .{ .access = .user });
-    }
-
-    return .{ .phys_start = phys, .virt_top = virt_top };
 }

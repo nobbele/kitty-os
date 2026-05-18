@@ -1,5 +1,5 @@
 pub inline fn outb(port: u16, value: u8) void {
-    asm volatile ("outb %[value],%[port]"
+    asm volatile ("outb %[value], %[port]"
         :
         : [value] "{al}" (value),
           [port] "N{dx}" (port),
@@ -7,7 +7,7 @@ pub inline fn outb(port: u16, value: u8) void {
 }
 
 pub inline fn outw(port: u16, value: u16) void {
-    asm volatile ("outw %[value],%[port]"
+    asm volatile ("outw %[value], %[port]"
         :
         : [value] "{ax}" (value),
           [port] "N{dx}" (port),

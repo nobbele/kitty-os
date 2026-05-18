@@ -53,14 +53,17 @@ pub const InterruptFrame = extern struct {
     ebx: usize,
     ecx: usize,
     edx: usize,
+    ebp: usize,
+    esi: usize,
+    edi: usize,
     // CPU pushed these:
-    ip: usize,
+    eip: usize,
     cs: usize,
     flags: usize,
 
     // only present on privilege change (ring 3 → ring 0):
-    // sp: usize,
-    // ss: usize,
+    esp: usize,
+    ss: usize,
 
     pub fn fromUser(self: *InterruptFrame) bool {
         return self.cs == root.USER_CS;
@@ -76,10 +79,16 @@ pub const InterruptFrame = extern struct {
             \\| ebx   | 0x{[ebx]X:0>8} |
             \\| ecx   | 0x{[ecx]X:0>8} |
             \\| edx   | 0x{[edx]X:0>8} |
+            \\| ebp   | 0x{[ebp]X:0>8} |
+            \\| esi   | 0x{[esi]X:0>8} |
+            \\| edi   | 0x{[edi]X:0>8} |
             \\|--------------------|
-            \\| ip    | 0x{[ip]X:0>8} |
+            \\| ip    | 0x{[eip]X:0>8} |
             \\| cs    | 0x{[cs]X:0>8} |
             \\| flags | 0x{[flags]X:0>8} |
+            \\|--------------------|
+            \\| esp | 0x{[esp]X:0>8} |
+            \\| ss | 0x{[ss]X:0>8} |
             \\----------------------
         , self.*);
     }
@@ -95,10 +104,13 @@ inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
             // already on stack: flags, cs, ip.
 
             const err = if (has_err) asm volatile ("pop %[ret]"
-                : [ret] "=r" (-> u32),
+                : [ret] "={esi}" (-> u32),
             ) else 0;
 
             const frame = asm volatile (
+                \\ push %%edi
+                \\ push %%esi
+                \\ push %%ebp
                 \\ push %%edx
                 \\ push %%ecx
                 \\ push %%ebx
@@ -108,14 +120,17 @@ inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
 
             asm volatile (
                 \\ pushl %[err]
-                \\ pushl %[vec]           // vec argument
-                \\ pushl %[frame]         // pointer to frame
+                \\ pushl %[vec]
+                \\ pushl %[frame]
                 \\ call handler_trampoline
-                \\ addl $8, %esp          // pop vec, frame pointer
+                \\ addl $12, %esp
                 \\ pop %%eax
                 \\ pop %%ebx
                 \\ pop %%ecx
                 \\ pop %%edx
+                \\ pop %%ebp
+                \\ pop %%esi
+                \\ pop %%edi
                 \\ iret
                 :
                 : [err] "r" (err),

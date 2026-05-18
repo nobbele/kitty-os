@@ -74,9 +74,13 @@ fn checkAndScroll() void {
     }
 }
 
+pub fn serialPrintChar(char: u8) void {
+    port.outb(0xE9, char);
+}
+
 /// Print character to the VGA
 pub fn printChar(char: u8) void {
-    port.outb(0xE9, char);
+    serialPrintChar(char);
     switch (char) {
         '\n' => {
             g_column = 0;
@@ -92,6 +96,12 @@ pub fn printChar(char: u8) void {
                 checkAndScroll();
             }
         },
+    }
+}
+
+pub fn serialPrintString(str: []const u8) void {
+    for (str) |char| {
+        serialPrintChar(char);
     }
 }
 
@@ -114,10 +124,6 @@ pub fn deleteChar() void {
     deleteCharAt(g_column, g_row);
 }
 
-/// Implementation of std.Io.Writer.vtable.drain function.
-/// When flush is called or the writer buffer is full this function is called.
-/// This function first writes all data of writer buffer after that it writes
-/// the argument data in which the last element is written splat times.
 fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
     // the length of data must not be zero
     std.debug.assert(data.len != 0);
@@ -152,13 +158,47 @@ fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
     return consumed;
 }
 
+fn serialDrain(w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
+    // the length of data must not be zero
+    std.debug.assert(data.len != 0);
+
+    var consumed: usize = 0;
+    const pattern = data[data.len - 1];
+    const splat_len = pattern.len * splat;
+
+    // If buffer is not empty write it first
+    if (w.end != 0) {
+        serialPrintString(w.buffered());
+        w.end = 0;
+    }
+
+    // Now write all data except last element
+    for (data[0 .. data.len - 1]) |bytes| {
+        serialPrintString(bytes);
+        consumed += bytes.len;
+    }
+
+    // If out patter (i.e. last element of data) is non zero len then write splat times
+    switch (pattern.len) {
+        0 => {},
+        else => {
+            for (0..splat) |_| {
+                serialPrintString(pattern);
+            }
+        },
+    }
+    // Now we have to return how many bytes we consumed from data
+    consumed += splat_len;
+    return consumed;
+}
+
 /// Returns std.Io.Writer implementation for this console
-pub fn writer(buffer: []u8) std.Io.Writer {
+pub fn writer(buffer: []u8, drainFun: @TypeOf(drain)) std.Io.Writer {
     return .{
         .buffer = buffer,
         .end = 0,
         .vtable = &.{
-            .drain = drain,
+            .drain = drainFun,
         },
     };
 }
@@ -172,12 +212,23 @@ pub fn printString(str: []const u8) void {
 
 /// Print with standard zig format to VGA
 pub fn print(comptime fmt: []const u8, args: anytype) void {
-    var w = writer(&.{});
+    var w = writer(&.{}, drain);
     w.print(fmt, args) catch return;
 }
 
 pub fn println(comptime fmt: []const u8, args: anytype) void {
-    var w = writer(&.{});
+    var w = writer(&.{}, drain);
+    w.print(fmt, args) catch return;
+    w.printAsciiChar('\n', .{}) catch return;
+}
+
+pub fn serialPrint(comptime fmt: []const u8, args: anytype) void {
+    var w = writer(&.{}, serialDrain);
+    w.print(fmt, args) catch return;
+}
+
+pub fn serialPrintln(comptime fmt: []const u8, args: anytype) void {
+    var w = writer(&.{}, serialDrain);
     w.print(fmt, args) catch return;
     w.printAsciiChar('\n', .{}) catch return;
 }
