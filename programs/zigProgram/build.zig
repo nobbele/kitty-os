@@ -24,4 +24,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     b.installArtifact(exe);
+
+    const kitty_lib = b.dependency("kittylib", .{ .optimize = .ReleaseSmall });
+    exe.root_module.addImport("kitty", kitty_lib.module("kitty"));
 }

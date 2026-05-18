@@ -52,16 +52,17 @@ fn execElf() !void {
     for (program_headers) |ph| {
         switch (ph.type) {
             .LOAD => {
+                console.println("Loading {X}-{X}({X})", .{ ph.vaddr, ph.vaddr + ph.filesz, ph.vaddr + ph.memsz });
                 const page_offset = ph.vaddr % root.PAGE_SIZE;
                 const aligned_vaddr = std.mem.alignBackward(usize, ph.vaddr, root.PAGE_SIZE);
                 const allocated_size = ph.memsz + page_offset;
 
                 const alloc_paddr = pmm.alloc(allocated_size) orelse return error.OutOfMemory;
+                console.println("alloc_paddr: {X}", .{alloc_paddr});
 
-                try vmm.kernel_address_space.mapRange(alloc_paddr, alloc_paddr, allocated_size, .{ .access = .user });
                 try task.address_space.mapRange(aligned_vaddr, alloc_paddr, allocated_size, .{ .access = .user });
 
-                const dest: [*]u8 = @ptrFromInt(alloc_paddr + page_offset);
+                const dest: [*]u8 = @ptrFromInt(root.KERNEL_BASE + alloc_paddr + page_offset);
                 const src: [*]u8 = @ptrFromInt(data_phys + ph.offset);
 
                 @memset(dest[0..ph.memsz], 0);

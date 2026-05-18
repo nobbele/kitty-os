@@ -22,7 +22,7 @@ pub fn schedule(frame: *idt.InterruptFrame) void {
     current_idx = (current_idx + 1) % tasks.items.len;
     const next = tasks.items[current_idx];
 
-    console.serialPrintln("Scheduling {}", .{current_idx});
+    // console.serialPrintln("Scheduling {}", .{current_idx});
 
     switchTo(next);
 
@@ -44,10 +44,12 @@ pub const Task = struct {
     frame: idt.InterruptFrame = undefined,
 
     pub fn init() !Task {
+        const address_space = try vmm.AddressSpace.init();
+        const user_stack = try setupStack(&address_space);
         return .{
             .kernel_stack = try std.heap.page_allocator.alignedAlloc(u8, std.mem.Alignment.@"16", KERNEL_STACK_SIZE),
-            .user_stack = try setupStack(),
-            .address_space = try vmm.AddressSpace.init(),
+            .user_stack = user_stack,
+            .address_space = address_space,
         };
     }
 
@@ -61,7 +63,7 @@ const Stack = struct {
     virt_top: usize,
 };
 
-fn setupStack() !Stack {
+fn setupStack(address_space: *const vmm.AddressSpace) !Stack {
     const size = 2 * 4096 - 4;
     const phys = pmm.alloc(size) orelse return error.OutOfMemory;
     const virt_top = root.KERNEL_BASE - 4;
@@ -78,7 +80,7 @@ fn setupStack() !Stack {
     for (0..page_count) |stack_page| {
         const page_virt = virt_start + stack_page * root.PAGE_SIZE;
         const page_phys = phys + stack_page * root.PAGE_SIZE;
-        try vmm.kernel_address_space.map(page_virt, page_phys, .{ .access = .user });
+        try address_space.map(page_virt, page_phys, .{ .access = .user });
     }
 
     return .{ .phys_start = phys, .virt_top = virt_top };
