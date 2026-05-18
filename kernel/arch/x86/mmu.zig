@@ -109,6 +109,10 @@ pub fn map(virt: usize, phys: usize, opts: MappingOptions) !void {
             .writable = opts.writable,
             .access = opts.access,
         };
+    } else {
+        // Upgrade table entry if new mapping needs broader access
+        if (opts.access == .user) table_entry.flags.access = .user;
+        if (opts.writable) table_entry.flags.writable = true;
     }
 
     const table_phys = table_entry.address_high << 12;
@@ -116,7 +120,7 @@ pub fn map(virt: usize, phys: usize, opts: MappingOptions) !void {
     const page_entry = &table[(virt >> 12) & 0x3FF];
 
     if (page_entry.flags.present)
-        @panic("Page for virtual VGA address is occupied");
+        return error.AlreadyMapped;
 
     page_entry.flags = .{ .present = true, .writable = opts.writable, .access = opts.access };
     page_entry.address_high = @truncate(phys >> 12);

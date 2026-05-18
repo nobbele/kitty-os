@@ -82,10 +82,18 @@ const Flags = packed struct(u4) {
     granularity: enum(u1) { byte = 0, page = 1 } = .page,
 };
 
-const TSSEntry = packed struct(u800) { prev: u32, esp0: u32, ss0: u32, unused: u704 };
+const TSS = packed struct(u800) {
+    prev: u16 = 0,
+    _0: u16 = 0,
+    esp0: usize = undefined,
+    ss0: u16 = 0,
+    _1: u16 = 0,
+    unused0: u688 = 0,
+    iomap_base: u16 = @sizeOf(TSS),
+};
 
 const GDTR = packed struct(u48) { size: u16, offset: usize };
-const GDTEntry = packed struct(u64) {
+const GDT = packed struct(u64) {
     limit_low: u16,
     base_low: u24,
     access: SegmentAccess,
@@ -93,7 +101,7 @@ const GDTEntry = packed struct(u64) {
     flags: Flags,
     base_high: u8,
 
-    pub fn init(self: *GDTEntry, base: u32, limit: u20, access: SegmentAccess) void {
+    pub fn init(self: *GDT, base: u32, limit: u20, access: SegmentAccess) void {
         self.* = .{
             .base_low = @truncate(base),
             .base_high = @truncate(base >> 24),
@@ -104,9 +112,9 @@ const GDTEntry = packed struct(u64) {
         };
     }
 
-    pub fn init_tss(self: *GDTEntry, entry: *TSSEntry) void {
+    pub fn init_tss(self: *GDT, entry: *TSS) void {
         const base = @intFromPtr(entry);
-        const limit = @sizeOf(TSSEntry);
+        const limit = @sizeOf(TSS);
         self.* = .{
             .base_low = @truncate(base),
             .base_high = @truncate(base >> 24),
@@ -123,17 +131,17 @@ const GDTEntry = packed struct(u64) {
         };
     }
 
-    pub fn init_flat(self: *GDTEntry, access: SegmentAccess) void {
+    pub fn init_flat(self: *GDT, access: SegmentAccess) void {
         self.init(0, 0xFFFFF, access);
     }
 
-    pub fn init_null(self: *GDTEntry) void {
+    pub fn init_null(self: *GDT) void {
         self.* = @bitCast(@as(u64, 0));
     }
 };
 
-var gdt: [6]GDTEntry align(16) linksection(".bss") = undefined;
-var tss: TSSEntry align(16) = undefined;
+var gdt: [6]GDT align(16) linksection(".bss") = undefined;
+var tss: TSS align(16) = undefined;
 
 pub fn init() !void {
     gdt[0].init_null();
@@ -147,18 +155,20 @@ pub fn init() !void {
 
     loadGDT(.{
         .offset = @intFromPtr(&gdt),
-        .size = @intCast(@sizeOf(GDTEntry) * gdt.len - 1),
+        .size = @intCast(@sizeOf(GDT) * gdt.len - 1),
     });
 
-    @memset(@as([*]u8, @ptrCast(&tss))[0..@sizeOf(TSSEntry)], 0);
+    tss = .{
+        .ss0 = root.KERNEL_DS,
+        .iomap_base = @sizeOf(TSS),
+    };
 
-    tss.ss0 = root.KERNEL_DS;
     asm volatile (
         \\ mov %[tss], %%ax
         \\ ltr %%ax
         :
-        : [tss] "i" (root.TSS),
-        : .{ .ax = true });
+        : [tss] "{ax}" (@as(u16, root.TSS)),
+    );
 }
 
 pub fn setTaskKernelStack(esp: usize) void {

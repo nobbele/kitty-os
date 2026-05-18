@@ -49,7 +49,7 @@ pub const Exception = enum(u8) {
     _,
 };
 
-pub fn handler(frame: *idt.InterruptFrame, vec: u8, code: u8) void {
+pub fn handler(frame: *idt.InterruptFrame, vec: u8, code: u32) void {
     switch (vec) {
         0...31 => {
             const exception: Exception = @enumFromInt(vec);
@@ -71,11 +71,29 @@ pub fn handler(frame: *idt.InterruptFrame, vec: u8, code: u8) void {
     }
 }
 
-fn handleException(frame: *idt.InterruptFrame, exception: Exception, code: u8) void {
+const PageFaultErrorCode = packed struct(u32) {
+    present: bool,
+    write: bool,
+    user: bool,
+    reserved_write: bool,
+    instruction_fetch: bool,
+    protection_key: bool,
+    shadow_stack: bool,
+    reserved0: u8,
+    sgx: bool,
+    reserved1: u16,
+};
+
+fn handleException(frame: *idt.InterruptFrame, exception: Exception, code: u32) void {
     switch (exception) {
         .breakpoint => {
             console.println("Hit a usermode breakpoint:", .{});
             console.println("{f}", .{frame});
+            @panic("breakpoint");
+        },
+        .page_fault => {
+            const err: PageFaultErrorCode = @bitCast(code);
+            std.debug.panic("Page fault: {}", .{err});
         },
         else => {
             console.println("Exception {} ({}) {f}", .{ exception, code, frame });

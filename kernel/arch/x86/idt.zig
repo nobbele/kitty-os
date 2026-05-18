@@ -81,7 +81,7 @@ pub const InterruptFrame = extern struct {
     }
 };
 
-export fn handler_trampoline(frame: *InterruptFrame, vec: u8, code: u8) callconv(.c) void {
+export fn handler_trampoline(frame: *InterruptFrame, vec: u8, code: u32) callconv(.c) void {
     interrupts.handler(frame, vec, code);
 }
 
@@ -91,9 +91,8 @@ inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
             // already on stack: flags, cs, ip.
 
             const err = if (has_err) asm volatile ("pop %[ret]"
-                : [ret] "=r" (-> u16),
+                : [ret] "=r" (-> u32),
             ) else 0;
-            _ = err; // autofix
 
             const frame = asm volatile (
                 \\ push %%edx
@@ -104,6 +103,7 @@ inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
             );
 
             asm volatile (
+                \\ pushl %[err]
                 \\ pushl %[vec]           // vec argument
                 \\ pushl %[frame]         // pointer to frame
                 \\ call handler_trampoline
@@ -114,7 +114,8 @@ inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
                 \\ pop %%edx
                 \\ iret
                 :
-                : [vec] "i" (vec),
+                : [err] "r" (err),
+                  [vec] "i" (vec),
                   [frame] "r" (frame),
             );
         }
