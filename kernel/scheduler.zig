@@ -1,11 +1,10 @@
 const std = @import("std");
-
-const gdt = @import("arch/x86/gdt.zig");
-const idt = @import("arch/x86/idt.zig");
-const pmm = @import("arch/x86/pmm.zig");
-const vmm = @import("arch/x86/vmm.zig");
-const console = @import("console.zig");
-const root = @import("root.zig");
+const root = @import("root");
+const gdt = root.arch.gdt;
+const idt = root.arch.idt;
+const pmm = root.arch.pmm;
+const vmm = root.arch.vmm;
+const console = root.console;
 
 var tasks: std.ArrayList(*Task) = .empty;
 var current_idx: usize = 0;

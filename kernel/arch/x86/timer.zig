@@ -1,5 +1,7 @@
-const console = @import("../../console.zig");
-const scheduler = @import("../../scheduler.zig");
+const root = @import("root");
+const console = root.console;
+const scheduler = root.scheduler;
+
 const idt = @import("idt.zig");
 const interrupts = @import("interrupts.zig");
 const pic = @import("pic.zig");

@@ -1,7 +1,7 @@
 const std = @import("std");
+const root = @import("root");
+const console = root.console;
 
-const console = @import("../../console.zig");
-const root = @import("../../root.zig");
 const interrupts = @import("interrupts.zig");
 
 const SegmentSelector = packed struct(u16) {

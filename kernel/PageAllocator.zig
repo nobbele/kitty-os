@@ -1,9 +1,8 @@
 const std = @import("std");
-
-const pmm = @import("arch/x86/pmm.zig");
-const vmm = @import("arch/x86/vmm.zig");
-const console = @import("console.zig");
-const root = @import("root.zig");
+const root = @import("root");
+const pmm = root.arch.pmm;
+const vmm = root.arch.vmm;
+const console = root.console;
 
 pub const vtable: std.mem.Allocator.VTable = .{
     .alloc = alloc,

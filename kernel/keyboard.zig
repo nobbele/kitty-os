@@ -1,5 +1,5 @@
-const ps2 = @import("arch/x86/ps2.zig");
-const console = @import("console.zig");
+const console = @import("root").console;
+const ps2 = @import("root").arch.ps2;
 
 pub const UNSHIFTED_MAP = [_]u8{
     0,    27,  '1', '2', '3', '4', '5', '6', '7',  '8', '9', '0',  '-',  '=', 8,   '\t',

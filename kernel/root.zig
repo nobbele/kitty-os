@@ -1,8 +1,15 @@
 const std = @import("std");
 
-const console = @import("console.zig");
+pub const process = @import("arch/x86/process.zig");
+pub const arch = @import("arch/x86/root.zig");
+pub const console = @import("console.zig");
+pub const fs = @import("filesystem.zig");
+pub const keyboard = @import("keyboard.zig");
 const main = @import("main.zig");
-const multiboot = @import("multiboot.zig");
+pub const multiboot = @import("multiboot.zig");
+pub const scheduler = @import("scheduler.zig");
+pub const shell = @import("shell.zig");
+pub const syscall = @import("syscall.zig");
 
 comptime {
     @export(&multiboot.multiboot, .{ .name = "multiboot" });

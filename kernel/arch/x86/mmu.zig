@@ -1,7 +1,5 @@
-const std = @import("std");
+const root = @import("root");
 
-const console = @import("../../console.zig");
-const root = @import("../../root.zig");
 const pmm = @import("pmm.zig");
 
 pub const PAGE_DIRECTORY_COUNT: u32 = root.PAGE_SIZE / @sizeOf(u32);

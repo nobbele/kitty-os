@@ -1,6 +1,6 @@
 // https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html
-const console = @import("console.zig");
 const root = @import("root.zig");
+const console = root.console;
 
 const MultibootHeaderTag = extern struct {
     type: u16 align(1),

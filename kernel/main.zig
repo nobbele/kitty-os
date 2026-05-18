@@ -1,38 +1,30 @@
 const std = @import("std");
-
-const arch = @import("arch.zig");
-const gdt = @import("arch/x86/gdt.zig");
-const mmu = @import("arch/x86/mmu.zig");
-const pmm = @import("arch/x86/pmm.zig");
-const vmm = @import("arch/x86/vmm.zig");
-const console = @import("console.zig");
-const fs = @import("filesystem.zig");
-const multiboot = @import("multiboot.zig");
-const root = @import("root.zig");
-const scheduler = @import("scheduler.zig");
-const shell = @import("shell.zig");
+const root = @import("root");
+const console = root.console;
+const vmm = root.arch.vmm;
+const pmm = root.arch.pmm;
 
 pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noreturn {
     console.init();
 
     console.println("[multiboot] init", .{});
-    multiboot.init(multiboot_info_address);
+    root.multiboot.init(multiboot_info_address);
 
-    arch.init() catch unreachable;
+    @import("arch/x86/root.zig").init() catch unreachable;
 
     console.println("[fs] init", .{});
-    fs.init() catch unreachable;
+    root.fs.init() catch unreachable;
 
     console.println("Executing usermode program", .{});
     // // exec();
     execElf() catch |e| std.debug.panic("Failed to execute ELF: {}", .{e});
 
     console.println("[shell] start", .{});
-    shell.run();
+    root.shell.run();
 }
 
 fn execElf() !void {
-    const module = &multiboot.modules[1];
+    const module = &root.multiboot.modules[1];
     const data_phys = module.data_addr;
     try vmm.kernel_address_space.mapRange(data_phys, data_phys, module.data_len, .{ .access = .kernel });
 
@@ -46,8 +38,8 @@ fn execElf() !void {
     const section_headers = section_headers_ptr[0..header.shnum];
     _ = section_headers; // autofix
 
-    const task = try std.heap.page_allocator.create(scheduler.Task);
-    task.* = try scheduler.Task.init();
+    const task = try std.heap.page_allocator.create(root.scheduler.Task);
+    task.* = try .init();
 
     for (program_headers) |ph| {
         switch (ph.type) {
@@ -72,7 +64,7 @@ fn execElf() !void {
         }
     }
 
-    gdt.setTaskKernelStack(task.kernelStackTop());
+    root.arch.gdt.setTaskKernelStack(task.kernelStackTop());
     task.frame = .{
         .eax = 0,
         .ebx = 0,
@@ -91,29 +83,8 @@ fn execElf() !void {
 
     console.println("Adding task to scheduler", .{});
     asm volatile ("cli");
-    try scheduler.addTask(task);
-    const eip = task.frame.eip;
-    const esp = task.frame.esp;
-    const flags = task.frame.flags;
+    try root.scheduler.addTask(task);
 
-    scheduler.switchTo(task);
-    asm volatile (
-        \\ mov %[ds], %%ds
-        \\ mov %[ds], %%es
-        \\ mov %[ds], %%fs
-        \\ mov %[ds], %%gs
-        \\
-        \\ pushl %[ds] # ss
-        \\ pushl %[esp]
-        \\ pushl %[flags]
-        \\ pushl %[cs]
-        \\ pushl %[eip]
-        \\ iret
-        :
-        : [ds] "r" (@as(u32, root.USER_DS)),
-          [esp] "r" (esp),
-          [flags] "r" (flags),
-          [cs] "i" (root.USER_CS),
-          [eip] "r" (eip),
-    );
+    console.println("Switching to user-mode", .{});
+    root.process.startTask(task);
 }

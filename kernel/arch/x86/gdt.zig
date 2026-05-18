@@ -1,7 +1,6 @@
 const std = @import("std");
-
-const console = @import("../../console.zig");
-const root = @import("../../root.zig");
+const root = @import("root");
+const console = root.console;
 
 const SegmentAccess = packed struct(u8) {
     const Self = @This();

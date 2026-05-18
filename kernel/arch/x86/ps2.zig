@@ -1,5 +1,7 @@
-const console = @import("../../console.zig");
-const keyboard = @import("../../keyboard.zig");
+const root = @import("root");
+const console = root.console;
+const keyboard = root.keyboard;
+
 const idt = @import("idt.zig");
 const interrupts = @import("interrupts.zig");
 const pic = @import("pic.zig");

@@ -1,7 +1,7 @@
 const std = @import("std");
+const root = @import("root");
+const console = root.console;
 
-const console = @import("../../console.zig");
-const root = @import("../../root.zig");
 const mmu = @import("mmu.zig");
 const pmm = @import("pmm.zig");
 

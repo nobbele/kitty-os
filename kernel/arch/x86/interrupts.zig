@@ -1,9 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const root = @import("root");
+const console = root.console;
+const syscall = root.syscall;
 
-const console = @import("../../console.zig");
-const root = @import("../../root.zig");
-const syscall = @import("../../syscall.zig");
 const idt = @import("idt.zig");
 const mmu = @import("mmu.zig");
 const pic = @import("pic.zig");

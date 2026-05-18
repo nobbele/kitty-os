@@ -1,6 +1,6 @@
 const std = @import("std");
-
-const port = @import("arch/x86/port.zig");
+const root = @import("root");
+const port = root.arch.port;
 
 const VGA_WIDTH = 80;
 const VGA_HEIGHT = 25;
