@@ -6,7 +6,7 @@
     .minimum_zig_version = "0.16.0",
 
     .dependencies = .{
-        .zigProgram = .{ .path = "programs/zigProgram" },
+        .zigProgram = .{ .path = "userprog/zigProgram" },
     },
     .paths = .{
         "build.zig",

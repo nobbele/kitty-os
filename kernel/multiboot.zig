@@ -62,7 +62,7 @@ pub var entries: []MultibootMemoryMapEntry = undefined;
 // pub var acpiOldRsdp: acpi.rsdp = undefined;
 // pub var acpiNewRsdp: acpi.rsdp_20 = undefined;
 
-pub var modules: [2]MultibootModuleEntry = undefined;
+pub var modules: [1]MultibootModuleEntry = undefined;
 pub var modulesCount: usize = 0;
 
 pub fn init(multiboot_info_address: usize) void {
