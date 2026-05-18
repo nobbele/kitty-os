@@ -143,7 +143,7 @@ pub const AddressSpace = struct {
         asm volatile ("invlpg (%[addr])"
             :
             : [addr] "r" (virt),
-        );
+            : .{ .memory = true });
     }
 
     pub fn unmap(self: *const AddressSpace, virt: usize) !void {
@@ -159,14 +159,14 @@ pub const AddressSpace = struct {
         asm volatile ("invlpg (%[addr])"
             :
             : [addr] "r" (virt),
-        );
+            : .{ .memory = true });
     }
 
     pub fn load(self: *const AddressSpace) void {
         asm volatile ("mov %[pd], %%cr3"
             :
             : [pd] "r" (self.page_dir),
-        );
+            : .{ .memory = true });
     }
 };
 

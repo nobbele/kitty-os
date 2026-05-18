@@ -163,10 +163,9 @@ pub fn init() !void {
     };
 
     asm volatile (
-        \\ mov %[tss], %%ax
-        \\ ltr %%ax
+        \\ ltr %[tss]
         :
-        : [tss] "{ax}" (@as(u16, root.TSS)),
+        : [tss] "r" (@as(u16, root.TSS)),
     );
 }
 
@@ -179,15 +178,14 @@ fn loadGDT(gdtr: GDTR) void {
         \\ lgdt (%[gdtr])
         \\ ljmp %[kernel_cs], $reload_cs
         \\ reload_cs:
-        \\ mov %[kernel_ds], %ax
-        \\ mov %ax, %ds
-        \\ mov %ax, %es
-        \\ mov %ax, %fs
-        \\ mov %ax, %gs
-        \\ mov %ax, %ss
+        \\ movw %[kernel_ds], %ds
+        \\ movw %[kernel_ds], %es
+        \\ movw %[kernel_ds], %fs
+        \\ movw %[kernel_ds], %gs
+        \\ movw %[kernel_ds], %ss
         :
         : [gdtr] "r" (&gdtr),
           [kernel_cs] "i" (root.KERNEL_CS),
-          [kernel_ds] "i" (root.KERNEL_DS),
-    );
+          [kernel_ds] "r" (root.KERNEL_DS),
+        : .{ .memory = true });
 }

@@ -50,9 +50,9 @@ const IDTGate = packed struct(u64) {
 pub const InterruptFrame = extern struct {
     // pushed manually by stub:
     eax: usize,
-    ebx: usize,
     ecx: usize,
     edx: usize,
+    ebx: usize,
     ebp: usize,
     esi: usize,
     edi: usize,
@@ -87,8 +87,8 @@ pub const InterruptFrame = extern struct {
             \\| cs    | 0x{[cs]X:0>8} |
             \\| flags | 0x{[flags]X:0>8} |
             \\|--------------------|
-            \\| esp | 0x{[esp]X:0>8} |
-            \\| ss | 0x{[ss]X:0>8} |
+            \\| esp   | 0x{[esp]X:0>8} |
+            \\| ss    | 0x{[ss]X:0>8} |
             \\----------------------
         , self.*);
     }
@@ -105,29 +105,31 @@ inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
 
             const err = if (has_err) asm volatile ("pop %[ret]"
                 : [ret] "={esi}" (-> u32),
-            ) else 0;
+                :
+                : .{ .memory = true }) else 0;
 
             const frame = asm volatile (
                 \\ push %%edi
                 \\ push %%esi
                 \\ push %%ebp
+                \\ push %%ebx
                 \\ push %%edx
                 \\ push %%ecx
-                \\ push %%ebx
                 \\ push %%eax
                 : [ret] "={esp}" (-> usize),
-            );
+                :
+                : .{ .memory = true });
 
             asm volatile (
                 \\ pushl %[err]
                 \\ pushl %[vec]
                 \\ pushl %[frame]
                 \\ call handler_trampoline
-                \\ addl $12, %esp
+                \\ addl $12, %%esp
                 \\ pop %%eax
-                \\ pop %%ebx
                 \\ pop %%ecx
                 \\ pop %%edx
+                \\ pop %%ebx
                 \\ pop %%ebp
                 \\ pop %%esi
                 \\ pop %%edi
@@ -136,7 +138,7 @@ inline fn make_stub(comptime vec: u8, comptime has_err: bool) *const anyopaque {
                 : [err] "r" (err),
                   [vec] "i" (vec),
                   [frame] "r" (frame),
-            );
+                : .{ .memory = true });
         }
     };
     return @ptrCast(&S.handler);

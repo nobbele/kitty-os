@@ -21,5 +21,5 @@ pub fn startTask(task: *scheduler.Task) void {
           [flags] "r" (task.frame.flags),
           [cs] "i" (root.USER_CS),
           [eip] "r" (task.frame.eip),
-    );
+        : .{ .memory = true });
 }
