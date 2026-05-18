@@ -62,6 +62,10 @@ pub const InterruptFrame = extern struct {
     // sp: usize,
     // ss: usize,
 
+    pub fn fromUser(self: *InterruptFrame) bool {
+        return self.cs == root.USER_CS;
+    }
+
     pub fn format(
         self: *InterruptFrame,
         writer: *std.Io.Writer,

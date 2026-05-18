@@ -87,7 +87,7 @@ const PageFaultErrorCode = packed struct(u32) {
 fn handleException(frame: *idt.InterruptFrame, exception: Exception, code: u32) void {
     switch (exception) {
         .breakpoint => {
-            console.println("Hit a usermode breakpoint:", .{});
+            console.println("Hit a {s} breakpoint:", .{if (frame.fromUser()) "user" else "kernel"});
             console.println("{f}", .{frame});
             @panic("breakpoint");
         },

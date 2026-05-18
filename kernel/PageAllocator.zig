@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const pmm = @import("arch/x86/pmm.zig");
+const vmm = @import("arch/x86/vmm.zig");
 const console = @import("console.zig");
 const root = @import("root.zig");
 
@@ -18,14 +19,11 @@ const Header = struct {
 fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
     _ = ctx;
     _ = ret_addr;
-    std.debug.assert(alignment.toByteUnits() < root.PAGE_SIZE);
+    std.debug.assert(alignment.toByteUnits() <= root.PAGE_SIZE);
 
-    const addr = pmm.alloc(len);
-    if (addr == null) {
-        return null;
-    }
+    const phys = pmm.alloc(len) orelse return null;
 
-    return @ptrFromInt(root.KERNEL_BASE + addr.?);
+    return @ptrFromInt(root.KERNEL_BASE + phys);
 }
 
 fn free(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {

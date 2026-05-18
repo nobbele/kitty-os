@@ -112,37 +112,61 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
 
     console.println("[pmm,bitmap] init", .{});
     initBitmap(0xC0000000 + bitmap_map.?.address, memory_maps[0..number_of_maps]);
-    console.println("[pmm,bitmap] OK", .{});
+
+    // low 1MB: BIOS, IVT, VGA
+    // kernel image: 1MB to kernel_end
+    const kernel_end_phys = 0x100000 + root.kernelSize();
+    const kernel_end_page = divRoundUp(kernel_end_phys, root.PAGE_SIZE);
+    for (0..kernel_end_page) |p| markUsed(p);
+
+    for (multiboot.modules[0..multiboot.modulesCount]) |mod| {
+        const start_page = mod.data_addr / root.PAGE_SIZE;
+        const page_count = divRoundUp(mod.data_len, root.PAGE_SIZE);
+        for (start_page..start_page + page_count) |p| markUsed(p);
+        pages_in_use += page_count;
+    }
+
+    pages_in_use += kernel_end_page;
+}
+
+fn markUsed(page: usize) void {
+    const unit = page / @bitSizeOf(BitmapUnit);
+    const bit = page % @bitSizeOf(BitmapUnit);
+    bitmap[unit] |= @as(u8, @intCast(@as(u16, 1) << @as(u4, @intCast(bit))));
 }
 
 pub fn alloc(size: usize) ?usize {
     const req_pages = divRoundUp(size, root.PAGE_SIZE);
-    var satisfied_pages: usize = 0;
 
-    var address: usize = 0;
+    var run_start: usize = 0;
+    var run_len: usize = 0;
+    var page: usize = 0;
 
-    for (bitmap) |*unit| {
-        for (0..@bitSizeOf(BitmapUnit)) |bit| {
-            // We have allocated the required number of pages, we can safely return the buffer now.
-            if (satisfied_pages == req_pages) {
-                pages_in_use += satisfied_pages;
-                return address;
-            }
+    outer: for (bitmap) |_| {
+        for (0..@bitSizeOf(BitmapUnit)) |_| {
+            if (page >= total_pages) break :outer;
 
-            const mask = @as(u8, @intCast(@as(u16, 1) << @as(u4, @intCast(bit))));
-            if ((unit.* & mask) == 0) {
-                // We found a free page!
-                satisfied_pages += 1;
-                unit.* |= mask;
+            const unit = page / @bitSizeOf(BitmapUnit);
+            const bit: u3 = @intCast(page % @bitSizeOf(BitmapUnit));
+            const mask = @as(BitmapUnit, 1) << bit;
+
+            if ((bitmap[unit] & mask) == 0) {
+                if (run_len == 0) run_start = page;
+                run_len += 1;
+                if (run_len == req_pages) {
+                    // Found a run — mark all pages used
+                    for (run_start..run_start + req_pages) |p| markUsed(p);
+                    pages_in_use += req_pages;
+                    return run_start * root.PAGE_SIZE;
+                }
             } else {
-                // Either we still didn't find a free page, or the next page is allocated.
-                address += root.PAGE_SIZE;
-                satisfied_pages = 0;
+                run_len = 0;
             }
+
+            page += 1;
         }
     }
 
-    std.debug.panic("[pmm] Failed allocate {Bi:.1}", .{size});
     return null;
 }
 

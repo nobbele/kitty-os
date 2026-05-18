@@ -4,8 +4,8 @@ const arch = @import("arch.zig");
 const gdt = @import("arch/x86/gdt.zig");
 const mmu = @import("arch/x86/mmu.zig");
 const pmm = @import("arch/x86/pmm.zig");
+const vmm = @import("arch/x86/vmm.zig");
 const console = @import("console.zig");
-const elf = @import("elf.zig");
 const fs = @import("filesystem.zig");
 const multiboot = @import("multiboot.zig");
 const root = @import("root.zig");
@@ -19,10 +19,12 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
 
     arch.init() catch unreachable;
 
+    console.println("[fs] init", .{});
     fs.init() catch unreachable;
 
+    console.println("Executing user-mode program", .{});
     // exec();
-    execElf() catch unreachable;
+    execElf() catch |e| std.debug.panic("Failed to execute ELF: {}", .{e});
 
     console.println("[shell] start", .{});
     shell.run();
@@ -41,36 +43,35 @@ const Task = struct {
 fn execElf() !void {
     const module = &multiboot.modules[1];
     const data_phys = module.data_addr;
-    try mmu.mapRange(data_phys, data_phys, module.data_len, .{ .access = .kernel });
+    try vmm.kernel_address_space.mapRange(data_phys, data_phys, module.data_len, .{ .access = .kernel });
 
-    const header: *const elf.Header = @ptrFromInt(data_phys);
-    std.debug.assert(header.id.magic == elf.MAGIC);
-    // console.println("{f}", .{std.json.fmt(header, .{ .whitespace = .indent_1 })});
+    const header: *const std.elf.Elf32.Ehdr = @ptrFromInt(data_phys);
+    std.debug.assert(std.mem.eql(u8, header.ident[0..4], "\x7fELF"));
 
-    const program_headers_ptr: [*]align(1) const elf.ProgramHeader = @ptrFromInt(data_phys + header.program_header_offset);
-    const program_headers = program_headers_ptr[0..header.program_header_entries];
+    const program_headers_ptr: [*]align(1) const std.elf.Elf32.Phdr = @ptrFromInt(data_phys + header.phoff);
+    const program_headers = program_headers_ptr[0..header.phnum];
 
-    const section_headers_ptr: [*]align(1) const elf.SectionHeader = @ptrFromInt(data_phys + header.section_header_offset);
-    const section_headers = section_headers_ptr[0..header.section_header_entries];
+    const section_headers_ptr: [*]align(1) const std.elf.Elf32.Shdr = @ptrFromInt(data_phys + header.shoff);
+    const section_headers = section_headers_ptr[0..header.shnum];
     _ = section_headers; // autofix
 
     for (program_headers) |ph| {
-        switch (ph.kind) {
-            .load => {
+        switch (ph.type) {
+            .LOAD => {
                 const page_offset = ph.vaddr % root.PAGE_SIZE;
                 const aligned_vaddr = std.mem.alignBackward(usize, ph.vaddr, root.PAGE_SIZE);
-                const aligned_size = ph.mem_size + page_offset;
+                const aligned_size = ph.memsz + page_offset;
 
-                const alloc_paddr = pmm.alloc(ph.mem_size + page_offset) orelse unreachable;
+                const alloc_paddr = pmm.alloc(ph.memsz + page_offset) orelse return error.OutOfMemory;
 
-                try mmu.mapRange(aligned_vaddr, alloc_paddr, aligned_size, .{ .access = .user });
+                try vmm.kernel_address_space.mapRange(aligned_vaddr, alloc_paddr, aligned_size, .{ .access = .user });
 
                 const alloc_ptr: [*]u8 = @ptrFromInt(ph.vaddr);
                 const data_ptr: [*]u8 = @ptrFromInt(data_phys + ph.offset);
-                @memcpy(alloc_ptr[0..ph.file_size], data_ptr[0..ph.file_size]);
+                @memcpy(alloc_ptr[0..ph.filesz], data_ptr[0..ph.filesz]);
 
-                const extra = ph.mem_size - ph.file_size;
-                @memset(alloc_ptr[ph.file_size .. ph.file_size + extra], 0);
+                const extra = ph.memsz - ph.filesz;
+                @memset(alloc_ptr[ph.filesz .. ph.filesz + extra], 0);
             },
             else => {},
         }
@@ -78,7 +79,7 @@ fn execElf() !void {
 
     const task = try std.heap.page_allocator.create(Task);
 
-    const esp_virt = setupStack();
+    const esp_virt = try setupStack();
 
     gdt.setTaskKernelStack(task.kernelStackTop());
 
@@ -98,13 +99,13 @@ fn execElf() !void {
         : [ds] "{eax}" (@as(u32, root.USER_DS)),
           [esp] "r" (esp_virt),
           [cs] "i" (root.USER_CS),
-          [eip] "r" (header.entry_addr),
+          [eip] "r" (header.entry),
     );
 }
 
-fn setupStack() usize {
+fn setupStack() !usize {
     const size = 2 * 4096 - 4;
-    const phys = pmm.alloc(size) orelse unreachable;
+    const phys = pmm.alloc(size) orelse return error.OutOfMemory;
     const virt_top = root.KERNEL_BASE - 4;
     const virt_start = virt_top - size;
 
@@ -119,7 +120,7 @@ fn setupStack() usize {
     for (0..page_count) |stack_page| {
         const page_virt = virt_start + stack_page * root.PAGE_SIZE;
         const page_phys = phys + stack_page * root.PAGE_SIZE;
-        mmu.map(page_virt, page_phys, .{ .access = .user }) catch unreachable;
+        try vmm.kernel_address_space.map(page_virt, page_phys, .{ .access = .user });
     }
 
     return virt_top;
@@ -128,8 +129,8 @@ fn setupStack() usize {
 fn exec() void {
     // Identity map for simplicity
     const data_phys = @intFromPtr(multiboot.modules[0].data_addr.ptr);
-    mmu.map(data_phys, data_phys, .{ .access = .user }) catch unreachable;
-    mmu.map(0x100_000, data_phys, .{ .access = .user }) catch unreachable;
+    vmm.kernel_address_space.map(data_phys, data_phys, .{ .access = .user }) catch unreachable;
+    vmm.kernel_address_space.map(0x100_000, data_phys, .{ .access = .user }) catch unreachable;
 
     const esp_virt = setupStack();
 

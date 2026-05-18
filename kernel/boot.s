@@ -27,24 +27,14 @@ _start:
     # Map 1023 pages. The 1024th will be the VGA text buffer.
 	movl $1023, %ecx
 1:
-    # Map the kernel and bootloader (first 1M).
-	cmpl $(_kernel_end - 0xC0000000), %esi
-	jge 3f
+ 	# Map physical address as "present, writable".
+    movl %esi, %edx
+    orl $0x003, %edx
+    movl %edx, (%edi)
+    addl $4096, %esi
+    addl $4, %edi
+    loop 1b
 
-    # Map physical address as "present, writable".
-	movl %esi, %edx
-	orl $0x003, %edx
-	movl %edx, (%edi)
-
-2:  
-    # Size of page is 4096 bytes.
-	addl $4096, %esi
-	# Size of entries in boot_page_table1 is 4 bytes.
-	addl $4, %edi
-	# Loop to the next entry if we haven't finished.
-	loop 1b
-
-3:
     # Map VGA video memory to 0xC03FF000 as "present, writable".
 	movl $(0x000B8000 | 0x003), boot_page_table1 - 0xC0000000 + 1023 * 4
 
