@@ -6,7 +6,7 @@ const mmu = @import("mmu.zig");
 const pmm = @import("pmm.zig");
 
 pub var kernel_address_space: AddressSpace = undefined;
-var kernel_entries: [*]mmu.PageDirEntry = undefined;
+pub var kernel_entries: [*]mmu.PageDirEntry = undefined;
 
 pub fn init() !void {
     const kernel_dir_phys = pmm.alloc(mmu.PAGE_DIRECTORY_COUNT * @sizeOf(u32)) orelse return error.OutOfMemory;
@@ -26,7 +26,7 @@ pub fn init() !void {
     try mapInto(kernel_entries, 0xC03FF000, 0x000B8000, .{ .overwrite = true });
 
     console.println("[vmm] Creating kernel address space", .{});
-    kernel_address_space = try AddressSpace.create();
+    kernel_address_space = try AddressSpace.init();
 
     console.println("[vmm] Loading kernel address space", .{});
     kernel_address_space.load();
@@ -72,10 +72,31 @@ fn mapInto(pd: [*]mmu.PageDirEntry, virt: usize, phys: usize, opts: MappingOptio
     pte.address_high = @truncate(phys >> 12);
 }
 
+fn unmapFrom(pd: [*]mmu.PageDirEntry, virt: usize) !void {
+    if (!std.mem.isAligned(virt, root.PAGE_SIZE))
+        return error.UnalignedAddress;
+
+    const pdi = virt >> 22;
+    const pti = (virt >> 12) & 0x3FF;
+    const pde = &pd[pdi];
+
+    if (!pde.flags.present)
+        return error.NotMapped;
+
+    const pt_phys: usize = @as(usize, pde.address_high) << 12;
+    const pt: [*]mmu.PageTableEntry = @ptrFromInt(root.KERNEL_BASE + pt_phys);
+    const pte = &pt[pti];
+
+    if (!pte.flags.present)
+        return error.NotMapped;
+
+    pte.* = @bitCast(@as(u32, 0));
+}
+
 pub const AddressSpace = struct {
     page_dir: usize,
 
-    pub fn create() !AddressSpace {
+    pub fn init() !AddressSpace {
         const dir_phys = pmm.alloc(mmu.PAGE_DIRECTORY_COUNT * @sizeOf(u32)) orelse return error.OutOfMemory;
         const self: AddressSpace = .{ .page_dir = dir_phys };
 
@@ -101,9 +122,33 @@ pub const AddressSpace = struct {
         }
     }
 
+    pub fn unmapRange(self: *const AddressSpace, virt: usize, length: usize) !void {
+        const aligned_length = std.mem.alignForward(usize, length, root.PAGE_SIZE);
+        var offset: usize = 0;
+        while (offset < aligned_length) : (offset += root.PAGE_SIZE) {
+            try self.unmap(virt + offset);
+        }
+    }
+
     pub fn map(self: *const AddressSpace, virt: usize, phys: usize, opts: MappingOptions) !void {
         const pd = self.dirEntries();
         try mapInto(pd, virt, phys, opts);
+
+        // sync kernel mappings back to kernel_entries
+        if (virt >= root.KERNEL_BASE) {
+            const pdi = virt >> 22;
+            kernel_entries[pdi] = self.dirEntries()[pdi];
+        }
+
+        asm volatile ("invlpg (%[addr])"
+            :
+            : [addr] "r" (virt),
+        );
+    }
+
+    pub fn unmap(self: *const AddressSpace, virt: usize) !void {
+        const pd = self.dirEntries();
+        try unmapFrom(pd, virt);
 
         // sync kernel mappings back to kernel_entries
         if (virt >= root.KERNEL_BASE) {

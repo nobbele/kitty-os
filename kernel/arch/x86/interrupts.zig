@@ -5,7 +5,9 @@ const console = @import("../../console.zig");
 const root = @import("../../root.zig");
 const syscall = @import("../../syscall.zig");
 const idt = @import("idt.zig");
+const mmu = @import("mmu.zig");
 const pic = @import("pic.zig");
+const vmm = @import("vmm.zig");
 
 pub const IrqHandler = *const fn () void;
 
@@ -93,7 +95,28 @@ fn handleException(frame: *idt.InterruptFrame, exception: Exception, code: u32) 
         },
         .page_fault => {
             const err: PageFaultErrorCode = @bitCast(code);
-            std.debug.panic("Page fault: {}", .{err});
+            const fault_addr = asm volatile ("mov %%cr2, %[cr2]"
+                : [cr2] "=r" (-> usize),
+            );
+
+            if (fault_addr >= root.KERNEL_BASE and !err.present) {
+                const pdi = fault_addr >> 22;
+                const kernel_pde = vmm.kernel_entries[pdi];
+                if (kernel_pde.flags.present) {
+                    const cr3 = asm volatile ("mov %%cr3, %[cr3]"
+                        : [cr3] "=r" (-> usize),
+                    );
+                    const pd: [*]mmu.PageDirEntry = @ptrFromInt(root.KERNEL_BASE + cr3);
+                    pd[pdi] = kernel_pde;
+                    return; // resume execution, no invlpg needed
+                }
+            }
+
+            std.debug.panic("Page fault at 0x{x} ({s}): {}", .{
+                fault_addr,
+                if (err.user) "user" else "kernel",
+                err,
+            });
         },
         else => {
             console.println("Exception {} ({}) {f}", .{ exception, code, frame });

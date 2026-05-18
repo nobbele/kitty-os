@@ -167,6 +167,7 @@ pub fn alloc(size: usize) ?usize {
         }
     }
 
+    console.println("[pmm] Unable to allocate {Bi:.1}", .{size});
     return null;
 }
 

@@ -22,7 +22,7 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
     console.println("[fs] init", .{});
     fs.init() catch unreachable;
 
-    console.println("Executing user-mode program", .{});
+    console.println("Executing usermode program", .{});
     // exec();
     execElf() catch |e| std.debug.panic("Failed to execute ELF: {}", .{e});
 
@@ -33,7 +33,16 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
 const Task = struct {
     const KERNEL_STACK_SIZE = 0x2000;
 
-    kernel_stack: [KERNEL_STACK_SIZE]u8 align(16),
+    kernel_stack: [KERNEL_STACK_SIZE]u8 align(16) = undefined,
+    user_stack: Stack,
+    address_space: vmm.AddressSpace,
+
+    pub fn init() !Task {
+        return .{
+            .user_stack = try setupStack(),
+            .address_space = try vmm.AddressSpace.init(),
+        };
+    }
 
     pub fn kernelStackTop(self: *Task) usize {
         return @intFromPtr(&self.kernel_stack) + KERNEL_STACK_SIZE;
@@ -55,39 +64,43 @@ fn execElf() !void {
     const section_headers = section_headers_ptr[0..header.shnum];
     _ = section_headers; // autofix
 
+    const task = try std.heap.page_allocator.create(Task);
+    task.* = try Task.init();
+
     for (program_headers) |ph| {
         switch (ph.type) {
             .LOAD => {
                 const page_offset = ph.vaddr % root.PAGE_SIZE;
                 const aligned_vaddr = std.mem.alignBackward(usize, ph.vaddr, root.PAGE_SIZE);
-                const aligned_size = ph.memsz + page_offset;
+                const allocated_size = ph.memsz + page_offset;
 
-                const alloc_paddr = pmm.alloc(ph.memsz + page_offset) orelse return error.OutOfMemory;
+                const alloc_paddr = pmm.alloc(allocated_size) orelse return error.OutOfMemory;
 
-                try vmm.kernel_address_space.mapRange(aligned_vaddr, alloc_paddr, aligned_size, .{ .access = .user });
+                try vmm.kernel_address_space.mapRange(alloc_paddr, alloc_paddr, allocated_size, .{ .access = .user });
+                try task.address_space.mapRange(aligned_vaddr, alloc_paddr, allocated_size, .{ .access = .user });
 
-                const alloc_ptr: [*]u8 = @ptrFromInt(ph.vaddr);
-                const data_ptr: [*]u8 = @ptrFromInt(data_phys + ph.offset);
-                @memcpy(alloc_ptr[0..ph.filesz], data_ptr[0..ph.filesz]);
+                const dest: [*]u8 = @ptrFromInt(alloc_paddr + page_offset);
+                const src: [*]u8 = @ptrFromInt(data_phys + ph.offset);
 
-                const extra = ph.memsz - ph.filesz;
-                @memset(alloc_ptr[ph.filesz .. ph.filesz + extra], 0);
+                @memset(dest[0..ph.memsz], 0);
+                @memcpy(dest[0..ph.filesz], src[0..ph.filesz]);
             },
             else => {},
         }
     }
 
-    const task = try std.heap.page_allocator.create(Task);
-
-    const esp_virt = try setupStack();
-
     gdt.setTaskKernelStack(task.kernelStackTop());
+    console.println("Jumping to usermode", .{});
 
+    const entry = header.entry;
+    const esp = task.user_stack.virt_top;
+
+    task.address_space.load();
     asm volatile (
-        \\ mov %%ax, %%ds
-        \\ mov %%ax, %%es
-        \\ mov %%ax, %%fs
-        \\ mov %%ax, %%gs
+        \\ mov %[ds], %%ds
+        \\ mov %[ds], %%es
+        \\ mov %[ds], %%fs
+        \\ mov %[ds], %%gs
         \\
         \\ pushl %[ds] # ss
         \\ pushl %[esp]
@@ -96,14 +109,19 @@ fn execElf() !void {
         \\ pushl %[eip]
         \\ iret
         :
-        : [ds] "{eax}" (@as(u32, root.USER_DS)),
-          [esp] "r" (esp_virt),
+        : [ds] "r" (@as(u32, root.USER_DS)),
+          [esp] "r" (esp),
           [cs] "i" (root.USER_CS),
-          [eip] "r" (header.entry),
+          [eip] "r" (entry),
     );
 }
 
-fn setupStack() !usize {
+const Stack = struct {
+    phys_start: usize,
+    virt_top: usize,
+};
+
+fn setupStack() !Stack {
     const size = 2 * 4096 - 4;
     const phys = pmm.alloc(size) orelse return error.OutOfMemory;
     const virt_top = root.KERNEL_BASE - 4;
@@ -123,42 +141,5 @@ fn setupStack() !usize {
         try vmm.kernel_address_space.map(page_virt, page_phys, .{ .access = .user });
     }
 
-    return virt_top;
-}
-
-fn exec() void {
-    // Identity map for simplicity
-    const data_phys = @intFromPtr(multiboot.modules[0].data_addr.ptr);
-    vmm.kernel_address_space.map(data_phys, data_phys, .{ .access = .user }) catch unreachable;
-    vmm.kernel_address_space.map(0x100_000, data_phys, .{ .access = .user }) catch unreachable;
-
-    const esp_virt = setupStack();
-
-    for (multiboot.modules) |module| {
-        console.println("code: {X} {Bi:.1}", .{ module.data_addr, module.data_addr.len });
-
-        gdt.setTaskKernelStack(asm volatile ("mov %%esp, %[esp]"
-            : [esp] "=r" (-> usize),
-        ));
-
-        asm volatile (
-            \\ movw %[ds], %%ax
-            \\ mov %%ax, %%ds
-            \\ mov %%ax, %%es
-            \\ mov %%ax, %%fs
-            \\ mov %%ax, %%gs
-            \\
-            \\ pushl %[ds] # ss
-            \\ pushl %[esp]
-            \\ pushf # eflags
-            \\ pushl %[cs]
-            \\ pushl %[eip]
-            \\ iret
-            :
-            : [ds] "i" (root.USER_DS),
-              [esp] "r" (esp_virt),
-              [cs] "i" (root.USER_CS),
-              [eip] "r" (@intFromPtr(module.data_addr.ptr)),
-            : .{ .ax = true });
-    }
+    return .{ .phys_start = phys, .virt_top = virt_top };
 }
