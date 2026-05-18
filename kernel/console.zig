@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const port = @import("arch/x86/port.zig");
+
 const VGA_WIDTH = 80;
 const VGA_HEIGHT = 25;
 const VGA_SIZE = VGA_WIDTH * VGA_HEIGHT;
@@ -74,6 +76,7 @@ fn checkAndScroll() void {
 
 /// Print character to the VGA
 pub fn printChar(char: u8) void {
+    port.outb(0xE9, char);
     switch (char) {
         '\n' => {
             g_column = 0;

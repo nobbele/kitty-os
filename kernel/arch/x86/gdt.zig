@@ -159,12 +159,6 @@ pub fn init() !void {
         :
         : [tss] "i" (root.TSS),
         : .{ .ax = true });
-
-    console.println("[gdt] Kernel code = 0x{X}", .{root.KERNEL_CS});
-    console.println("[gdt] Kernel data = 0x{X}", .{root.KERNEL_DS});
-    console.println("[gdt] User code = 0x{X}", .{root.USER_CS});
-    console.println("[gdt] User data = 0x{X}", .{root.USER_DS});
-    console.println("[gdt] Task segment = 0x{X}", .{root.TSS});
 }
 
 pub fn setTaskKernelStack(esp: usize) void {

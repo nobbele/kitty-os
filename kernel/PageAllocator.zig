@@ -18,7 +18,8 @@ const Header = struct {
 fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
     _ = ctx;
     _ = ret_addr;
-    _ = alignment;
+    std.debug.assert(alignment.toByteUnits() < root.PAGE_SIZE);
+
     const addr = pmm.alloc(len);
     if (addr == null) {
         return null;

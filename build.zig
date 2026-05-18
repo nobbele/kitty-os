@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) void {
     const kernel = b.addExecutable(.{
         .name = "KittyOS.elf",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
+            .root_source_file = b.path("kernel/root.zig"),
             .target = target,
             .optimize = optimize,
             .code_model = .kernel,
@@ -25,14 +25,14 @@ pub fn build(b: *std.Build) void {
             .red_zone = false,
         }),
     });
-    kernel.setLinkerScript(b.path("src/linker.ld"));
-    kernel.root_module.addAssemblyFile(b.path("src/boot.s"));
+    kernel.setLinkerScript(b.path("kernel/linker.ld"));
+    kernel.root_module.addAssemblyFile(b.path("kernel/boot.s"));
     b.installArtifact(kernel);
 
     const kernel_check = b.addExecutable(.{
         .name = "KittyOS.elf",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
+            .root_source_file = b.path("kernel/root.zig"),
             .target = target,
             .optimize = optimize,
             .code_model = .kernel,
@@ -43,13 +43,17 @@ pub fn build(b: *std.Build) void {
     const check = b.step("check", "Check if foo compiles");
     check.dependOn(&kernel_check.step);
 
+    const zigProgramDep = b.dependency("zigProgram", .{ .optimize = .ReleaseSmall });
+    const zigProgramDep_exe = zigProgramDep.artifact("zigProgram");
+
     // == Make ISO ==
     const iso_wf = b.addWriteFiles();
     _ = iso_wf.addCopyFile(b.path("limine/limine-bios-cd.bin"), "limine-bios-cd.bin");
     _ = iso_wf.addCopyFile(b.path("limine/limine-bios.sys"), "limine-bios.sys");
     _ = iso_wf.addCopyFile(b.path("limine/limine.conf"), "limine.conf");
     _ = iso_wf.addCopyFile(kernel.getEmittedBin(), "KittyOS.elf");
-    _ = iso_wf.addCopyFile(b.path("program"), "program");
+    _ = iso_wf.addCopyFile(b.path("programs/program"), "program");
+    _ = iso_wf.addCopyFile(zigProgramDep_exe.getEmittedBin(), "zigProgram");
     iso_wf.step.dependOn(&kernel.step);
 
     const xorriso = b.addSystemCommand(&.{
@@ -81,6 +85,7 @@ pub fn build(b: *std.Build) void {
         "-boot", "d",
         "-no-reboot",
         "-no-shutdown",
+        "-debugcon", "stdio",
         // "-serial", "stdio",
     });
     

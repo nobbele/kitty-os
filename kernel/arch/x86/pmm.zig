@@ -84,7 +84,6 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
     var bitmap_map: ?Map = null;
 
     for (entries) |*entry| {
-        console.println("[pmm] {}", .{entry.address});
         // A value of 1 indicates available RAM
         if (entry.type == 1 and entry.address <= max_memory_address) {
             const size: usize = @intCast(entry.length);

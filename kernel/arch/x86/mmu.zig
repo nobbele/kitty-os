@@ -83,6 +83,14 @@ pub const MappingOptions = struct {
     writable: bool = true,
 };
 
+pub fn mapRange(virt: usize, phys: usize, length: usize, opts: MappingOptions) !void {
+    const aligned_length = std.mem.alignForward(usize, length, root.PAGE_SIZE);
+    var offset: usize = 0;
+    while (offset < aligned_length) : (offset += root.PAGE_SIZE) {
+        try map(virt + offset, phys + offset, opts);
+    }
+}
+
 pub fn map(virt: usize, phys: usize, opts: MappingOptions) !void {
     if (!std.mem.isAligned(virt, root.PAGE_SIZE) or !std.mem.isAligned(phys, root.PAGE_SIZE))
         return MappingError.UnalignedAddress;

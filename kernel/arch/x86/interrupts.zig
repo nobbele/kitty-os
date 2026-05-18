@@ -17,7 +17,6 @@ pub fn registerIrq(irq: u8, h: @typeInfo(IrqHandler).pointer.child) void {
 }
 
 pub const Exception = enum(u8) {
-    // zig fmt: off
     division_error,
     debug,
     nmi,
@@ -47,8 +46,7 @@ pub const Exception = enum(u8) {
     reserved2,
     triple_fault,
     unused1,
-    _
-    // zig fmt: on
+    _,
 };
 
 pub fn handler(frame: *idt.InterruptFrame, vec: u8, code: u8) void {

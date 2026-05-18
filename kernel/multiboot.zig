@@ -46,8 +46,9 @@ pub const MultibootMemoryMapEntry = extern struct {
 };
 
 pub const MultibootModuleEntry = struct {
-    data: []const u8,
-    string: [*:0]const u8,
+    data_addr: usize,
+    data_len: usize,
+    str_addr: usize,
 };
 
 pub var commandLine: [*]u8 = undefined;
@@ -61,7 +62,7 @@ pub var entries: []MultibootMemoryMapEntry = undefined;
 // pub var acpiOldRsdp: acpi.rsdp = undefined;
 // pub var acpiNewRsdp: acpi.rsdp_20 = undefined;
 
-pub var modules: [1]MultibootModuleEntry = undefined;
+pub var modules: [2]MultibootModuleEntry = undefined;
 pub var modulesCount: usize = 0;
 
 pub fn init(multiboot_info_address: usize) void {
@@ -91,13 +92,12 @@ pub fn init(multiboot_info_address: usize) void {
                 const mod_end: *u32 = @ptrFromInt(entry_address + TAG_SIZE + @sizeOf(u32));
                 const string: [*:0]u8 = @ptrFromInt(entry_address + TAG_SIZE + 2 * @sizeOf(u32));
 
-                const start_ptr: [*]const u8 = @ptrFromInt(mod_start.*);
-                const length = mod_end.* - mod_start.*;
-                const data = start_ptr[0..length];
+                console.println("Loading module \"{s}\"", .{string});
 
                 const module = MultibootModuleEntry{
-                    .data = data,
-                    .string = string,
+                    .data_addr = mod_start.*,
+                    .data_len = mod_end.* - mod_start.*,
+                    .str_addr = @intFromPtr(string),
                 };
 
                 modules[modulesCount] = module;

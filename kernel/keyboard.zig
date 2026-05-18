@@ -25,8 +25,32 @@ pub const SHIFTED_MAP = [_]u8{
 
 var shifted = false;
 
+var kbd_buffer: [16]u8 = undefined;
+var kbd_write: usize = 0;
+var kbd_read: usize = 0;
+
+pub fn pushScancode(scancode: u8) void {
+    kbd_buffer[kbd_write] = scancode;
+    kbd_write = (kbd_write + 1) % kbd_buffer.len;
+}
+
+pub fn tryReadScancode() ?u8 {
+    if (kbd_write == kbd_read) return null;
+
+    const data = kbd_buffer[kbd_read];
+    kbd_read = (kbd_read + 1) % kbd_buffer.len;
+    return data;
+}
+
 pub fn readKey() u8 {
-    var data = ps2.readKeyboard();
+    while (true) {
+        if (tryReadKey()) |k| return k;
+        // TODO don't spin?
+    }
+}
+
+pub fn tryReadKey() ?u8 {
+    var data = tryReadScancode() orelse return null;
 
     const pressed = data & 0x80 == 0;
     if (!pressed) data -= 0x80;
@@ -34,17 +58,17 @@ pub fn readKey() u8 {
     // LShift and RShift
     if (data == 0x2A or data == 0x36) {
         shifted = pressed;
-        return readKey();
+        return tryReadKey();
     }
 
     // Caps Lock
     if (data == 0x3A) {
         if (pressed) shifted = !shifted;
-        return readKey();
+        return tryReadKey();
     }
 
     // Ignore releasing keys
-    if (!pressed) return readKey();
+    if (!pressed) return tryReadKey();
 
     const map = if (shifted) SHIFTED_MAP else UNSHIFTED_MAP;
 

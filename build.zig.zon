@@ -5,7 +5,9 @@
     .fingerprint = 0x5f9cbc2ee683d903,
     .minimum_zig_version = "0.16.0",
 
-    .dependencies = .{},
+    .dependencies = .{
+        .zigProgram = .{ .path = "programs/zigProgram" },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",
