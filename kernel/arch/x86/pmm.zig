@@ -102,6 +102,8 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
         }
     }
 
+    console.println("{any}", .{memory_maps});
+
     if (bitmap_map == null) {
         @panic("[pmm] not enough memory to initialize bitmap");
     }
@@ -134,7 +136,7 @@ fn markUsed(page: usize) void {
     bitmap[unit] |= @as(u8, @intCast(@as(u16, 1) << @as(u4, @intCast(bit))));
 }
 
-pub fn alloc(size: usize) ?usize {
+pub fn alloc(size: usize) !usize {
     const req_pages = divRoundUp(size, root.PAGE_SIZE);
 
     var run_start: usize = 0;
@@ -167,15 +169,16 @@ pub fn alloc(size: usize) ?usize {
     }
 
     console.println("[pmm] Unable to allocate {Bi:.1}", .{size});
-    return null;
+    return error.OutOfMemory;
 }
 
-pub fn free(address: usize, size: usize) void {
+pub fn free(address: usize, size: usize) !void {
     const start_page = address / root.PAGE_SIZE;
     const page_count = divRoundUp(size, root.PAGE_SIZE);
 
     if (page_count >= bitmap.len * @bitSizeOf(BitmapUnit)) {
-        std.debug.panic("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
+        console.println("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
+        return error.OutOfRange;
     }
 
     for (start_page..start_page + page_count) |page| {

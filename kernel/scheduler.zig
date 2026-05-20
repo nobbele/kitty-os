@@ -13,15 +13,46 @@ pub fn addTask(task: *Task) !void {
     try tasks.append(std.heap.page_allocator, task);
 }
 
+pub fn currentTask() ?*Task {
+    if (tasks.items.len == 0) return null;
+    return tasks.items[current_idx];
+}
+
+pub fn findNextTask() ?*Task {
+    for (0..tasks.items.len) |_| {
+        current_idx = (current_idx + 1) % tasks.items.len;
+        const next = tasks.items[current_idx];
+
+        if (next.sleep_timer == 0) {
+            return next;
+        }
+    }
+    return null;
+}
+
 pub fn schedule(frame: *idt.InterruptFrame) void {
     if (tasks.items.len == 0) return;
 
+    // Save current task
     tasks.items[current_idx].frame = frame.*;
 
-    current_idx = (current_idx + 1) % tasks.items.len;
-    const next = tasks.items[current_idx];
+    // Find the next task
+    const next = while (true) {
+        const next = findNextTask();
 
-    // console.serialPrintln("Scheduling {}", .{current_idx});
+        // Decrease all sleep timers
+        for (tasks.items) |task| {
+            task.sleep_timer -|= root.arch.timer.SCHEDULE_DT;
+        }
+
+        if (next) |task| {
+            break task;
+        }
+
+        asm volatile ("sti; hlt");
+    };
+
+    console.serialPrintln("Scheduling {} / {}", .{ current_idx + 1, tasks.items.len });
 
     switchTo(next);
 
@@ -41,6 +72,8 @@ pub const Task = struct {
     user_stack: Stack,
     address_space: vmm.AddressSpace,
     frame: idt.InterruptFrame = undefined,
+
+    sleep_timer: u32 = 0,
 
     pub fn init() !Task {
         const address_space = try vmm.AddressSpace.init();
@@ -64,7 +97,7 @@ const Stack = struct {
 
 fn setupStack(address_space: *const vmm.AddressSpace) !Stack {
     const size = 2 * 4096 - 4;
-    const phys = pmm.alloc(size) orelse return error.OutOfMemory;
+    const phys = try pmm.alloc(size);
     const virt_top = root.KERNEL_BASE - 4;
     const virt_start = virt_top - size;
 

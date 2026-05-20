@@ -192,14 +192,15 @@ fn serialDrain(w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize
     return consumed;
 }
 
+const drain_vtable: std.Io.Writer.VTable = .{ .drain = drain };
+const serial_drain_vtable: std.Io.Writer.VTable = .{ .drain = serialDrain };
+
 /// Returns std.Io.Writer implementation for this console
-pub fn writer(buffer: []u8, drainFun: @TypeOf(drain)) std.Io.Writer {
+pub fn writer(buffer: []u8, serial: bool) std.Io.Writer {
     return .{
         .buffer = buffer,
         .end = 0,
-        .vtable = &.{
-            .drain = drainFun,
-        },
+        .vtable = if (serial) &serial_drain_vtable else &drain_vtable,
     };
 }
 
@@ -212,23 +213,23 @@ pub fn printString(str: []const u8) void {
 
 /// Print with standard zig format to VGA
 pub fn print(comptime fmt: []const u8, args: anytype) void {
-    var w = writer(&.{}, drain);
+    var w = writer(&.{}, false);
     w.print(fmt, args) catch return;
 }
 
 pub fn println(comptime fmt: []const u8, args: anytype) void {
-    var w = writer(&.{}, drain);
+    var w = writer(&.{}, false);
     w.print(fmt, args) catch return;
     w.printAsciiChar('\n', .{}) catch return;
 }
 
 pub fn serialPrint(comptime fmt: []const u8, args: anytype) void {
-    var w = writer(&.{}, serialDrain);
+    var w = writer(&.{}, true);
     w.print(fmt, args) catch return;
 }
 
 pub fn serialPrintln(comptime fmt: []const u8, args: anytype) void {
-    var w = writer(&.{}, serialDrain);
+    var w = writer(&.{}, true);
     w.print(fmt, args) catch return;
     w.printAsciiChar('\n', .{}) catch return;
 }

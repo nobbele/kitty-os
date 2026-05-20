@@ -1,4 +1,5 @@
 const std = @import("std");
+const root = @import("root");
 
 pub var syscall_handlers: std.AutoArrayHashMapUnmanaged(Syscall, *const SyscallHandler) = .empty;
 
@@ -6,10 +7,11 @@ pub fn registerSyscall(id: Syscall, h: SyscallHandler) !void {
     try syscall_handlers.put(std.heap.page_allocator, id, h);
 }
 
-pub const Syscall = enum(u8) { read = 0, write = 1, _ };
+pub const Syscall = enum(u8) { read, write, exec, sleep, _ };
 
 pub const SyscallArgs = struct {
     args: [3]usize,
+    frame: *root.arch.idt.InterruptFrame,
 
     pub fn get(self: SyscallArgs, comptime T: type, n: u8) T {
         if (@sizeOf(T) > @sizeOf(usize)) {

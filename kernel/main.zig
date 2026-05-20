@@ -15,8 +15,9 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
     console.println("[fs] init", .{});
     root.fs.init() catch unreachable;
 
+    root.process.init() catch unreachable;
+
     console.println("Executing usermode program", .{});
-    // // exec();
     root.process.exec() catch |e| std.debug.panic("Failed to execute ELF: {}", .{e});
 
     console.println("[shell] start", .{});

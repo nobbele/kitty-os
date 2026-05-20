@@ -15,11 +15,14 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
 
     var buffer: [64]u8 = undefined;
 
-    var x: usize = asm volatile (""
-        : [ret] "={ebx}" (-> usize),
-    );
+    var x: usize = 0;
     while (true) {
         x += 1;
         kitty.write(1, std.fmt.bufPrint(&buffer, "Hello World {}\n", .{x}) catch unreachable);
+        kitty.sleep(1000);
+
+        if (x == 7000) {
+            kitty.exec();
+        }
     }
 }

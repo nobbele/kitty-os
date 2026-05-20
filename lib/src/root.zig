@@ -10,3 +10,20 @@ pub fn write(fd: u32, buffer: []const u8) void {
           [len] "{edx}" (buffer.len),
     );
 }
+
+pub fn exec() void {
+    asm volatile (
+        \\ int $0x80
+        :
+        : [syscall] "{eax}" (2),
+    );
+}
+
+pub fn sleep(amount: u32) void {
+    asm volatile (
+        \\ int $0x80
+        :
+        : [syscall] "{eax}" (3),
+          [amount] "{ebx}" (amount),
+    );
+}

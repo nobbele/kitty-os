@@ -131,6 +131,7 @@ fn dispatchSyscall(frame: *idt.InterruptFrame) void {
             frame.ebx, frame.ecx, frame.edx,
             // frame.esi, frame.edi, frame.ebp,
         },
+        .frame = frame,
     };
 
     const id: syscall.Syscall = @enumFromInt(frame.eax);

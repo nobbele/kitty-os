@@ -85,6 +85,7 @@ pub fn build(b: *std.Build) void {
         "-no-reboot",
         "-no-shutdown",
         "-debugcon", "stdio",
+        "-monitor", "telnet:127.0.0.1:55555,server,nowait"
         // "-serial", "stdio",
     });
     

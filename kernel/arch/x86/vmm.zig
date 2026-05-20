@@ -9,7 +9,7 @@ pub var kernel_address_space: AddressSpace = undefined;
 pub var kernel_entries: [*]mmu.PageDirEntry = undefined;
 
 pub fn init() !void {
-    const kernel_dir_phys = pmm.alloc(mmu.PAGE_DIRECTORY_COUNT * @sizeOf(u32)) orelse return error.OutOfMemory;
+    const kernel_dir_phys = try pmm.alloc(mmu.PAGE_DIRECTORY_COUNT * @sizeOf(u32));
     kernel_entries = @ptrFromInt(root.KERNEL_BASE + kernel_dir_phys);
     @memset(kernel_entries[0..mmu.PAGE_DIRECTORY_COUNT], @bitCast(@as(u32, 0)));
 
@@ -43,7 +43,7 @@ fn mapInto(pd: [*]mmu.PageDirEntry, virt: usize, phys: usize, opts: MappingOptio
     const pde = &pd[pdi];
 
     if (!pde.flags.present) {
-        const pt_phys = pmm.alloc(mmu.PAGE_TABLE_COUNT * @sizeOf(u32)) orelse return error.OutOfMemory;
+        const pt_phys = try pmm.alloc(mmu.PAGE_TABLE_COUNT * @sizeOf(u32));
 
         const pt: [*]mmu.PageTableEntry = @ptrFromInt(root.KERNEL_BASE + pt_phys);
         @memset(pt[0..mmu.PAGE_TABLE_COUNT], @bitCast(@as(u32, 0)));
@@ -97,7 +97,7 @@ pub const AddressSpace = struct {
     page_dir: usize,
 
     pub fn init() !AddressSpace {
-        const dir_phys = pmm.alloc(mmu.PAGE_DIRECTORY_COUNT * @sizeOf(u32)) orelse return error.OutOfMemory;
+        const dir_phys = try pmm.alloc(mmu.PAGE_DIRECTORY_COUNT * @sizeOf(u32));
         const self: AddressSpace = .{ .page_dir = dir_phys };
 
         const entries = self.dirEntries();
