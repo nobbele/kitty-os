@@ -1,7 +1,7 @@
 const root = @import("../../root.zig");
 const scheduler = @import("../../scheduler.zig");
 
-pub fn startTask(task: *scheduler.Task) void {
+pub fn startTask(task: *scheduler.Task) noreturn {
     scheduler.switchTo(task);
     asm volatile (
         \\ mov %[ds], %%ds
@@ -22,4 +22,5 @@ pub fn startTask(task: *scheduler.Task) void {
           [cs] "i" (root.USER_CS),
           [eip] "r" (task.frame.eip),
         : .{ .memory = true });
+    unreachable;
 }

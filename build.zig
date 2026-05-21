@@ -46,14 +46,33 @@ pub fn build(b: *std.Build) void {
     const shell_dep = b.dependency("shell", .{ .optimize = optimize });
     const shell_exe = shell_dep.artifact("shell");
 
+    const hello_world_dep = b.dependency("hello_world", .{ .optimize = optimize });
+    const hello_world_exe = hello_world_dep.artifact("hello-world");
+
+    const buildRamfsTool = b.addExecutable(.{
+        .name = "build_ramfs",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("build_ramfs.zig"),
+            .target = b.graph.host,
+        }),
+    });
+
+    const buildRamfsStep = b.addRunArtifact(buildRamfsTool);
+    buildRamfsStep.addArg("-o");
+    const buildRamfsOutput = buildRamfsStep.addOutputFileArg("ramfs.tar");
+    buildRamfsStep.addPrefixedFileArg("shell:", shell_exe.getEmittedBin());
+    buildRamfsStep.addPrefixedFileArg("hello:", hello_world_exe.getEmittedBin());
+    var buildRamfsOutputInstall = b.addInstallFileWithDir(buildRamfsOutput, .prefix, "ramfs.tar");
+
     // == Make ISO ==
     const iso_wf = b.addWriteFiles();
     _ = iso_wf.addCopyFile(b.path("limine/limine-bios-cd.bin"), "limine-bios-cd.bin");
     _ = iso_wf.addCopyFile(b.path("limine/limine-bios.sys"), "limine-bios.sys");
     _ = iso_wf.addCopyFile(b.path("limine/limine.conf"), "limine.conf");
     _ = iso_wf.addCopyFile(kernel.getEmittedBin(), "KittyOS.elf");
-    _ = iso_wf.addCopyFile(shell_exe.getEmittedBin(), "shell");
+    _ = iso_wf.addCopyFile(buildRamfsOutput, "ramfs");
     iso_wf.step.dependOn(&kernel.step);
+    iso_wf.step.dependOn(&buildRamfsOutputInstall.step);
 
     const xorriso = b.addSystemCommand(&.{
         // zig fmt: off

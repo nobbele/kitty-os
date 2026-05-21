@@ -67,14 +67,20 @@ pub fn tryReadKey() ?u8 {
         return tryReadKey();
     }
 
+    if (data >= 128) {
+        console.println("[keyboard] Out of range key", .{});
+    }
+
     // Ignore releasing keys
     if (!pressed) return tryReadKey();
 
     const map = if (shifted) SHIFTED_MAP else UNSHIFTED_MAP;
 
-    if (data >= 128) @panic("[keyboard] Out of range key");
     const char = map[data];
-    if (char == 0) @panic("[keyboard] Invalid key");
+    if (char == 0) {
+        console.serialPrintln("[keyboard] Invalid key", .{});
+        return null;
+    }
 
     return char;
 }

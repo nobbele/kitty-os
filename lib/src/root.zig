@@ -2,6 +2,16 @@ const std = @import("std");
 
 pub const syscall = @import("syscall.zig");
 
+export fn _start() callconv(.naked) void {
+    asm volatile ("call main");
+    asm volatile (
+        \\ int $0x80
+        :
+        : [syscall] "{eax}" (5),
+          [code] "{ebx}" (0),
+    );
+}
+
 pub fn readLine(buffer: []u8) !u32 {
     var char: u8 = undefined;
     var count: usize = 0;
@@ -11,6 +21,13 @@ pub fn readLine(buffer: []u8) !u32 {
         if (res == 0) {
             syscall.yield();
             continue;
+        }
+
+        // BS
+        if (char == 8) {
+            if (count > 0) {
+                count -= 1;
+            } else continue;
         }
 
         syscall.write(1, @as(*[1]u8, &char));

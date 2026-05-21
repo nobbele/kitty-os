@@ -70,7 +70,7 @@ pub const InterruptFrame = extern struct {
     }
 
     pub fn format(
-        self: *InterruptFrame,
+        self: *const InterruptFrame,
         writer: *std.Io.Writer,
     ) !void {
         try writer.print(

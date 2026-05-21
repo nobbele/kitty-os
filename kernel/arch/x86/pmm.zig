@@ -102,16 +102,16 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
         }
     }
 
-    console.println("{any}", .{memory_maps});
+    console.serialPrintln("{any}", .{memory_maps});
 
     if (bitmap_map == null) {
         @panic("[pmm] not enough memory to initialize bitmap");
     }
 
-    console.println("[pmm] Available memory: {Bi:.1}", .{total_size});
-    console.println("[pmm] Reserved for bitmap: {Bi:.1}", .{bitmap_size});
+    console.serialPrintln("[pmm] Available memory: {Bi:.1}", .{total_size});
+    console.serialPrintln("[pmm] Reserved for bitmap: {Bi:.1}", .{bitmap_size});
 
-    console.println("[pmm,bitmap] init", .{});
+    console.serialPrintln("[pmm,bitmap] init", .{});
     initBitmap(0xC0000000 + bitmap_map.?.address, memory_maps[0..number_of_maps]);
 
     // low 1MB: BIOS, IVT, VGA
@@ -119,21 +119,38 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
     const kernel_end_phys = 0x100000 + root.kernelSize();
     const kernel_end_page = divRoundUp(kernel_end_phys, root.PAGE_SIZE);
     for (0..kernel_end_page) |p| markUsed(p);
+    pages_in_use += kernel_end_page;
 
     for (multiboot.modules[0..multiboot.modulesCount]) |mod| {
-        const start_page = mod.data_addr / root.PAGE_SIZE;
+        const start_page = std.mem.alignBackward(usize, mod.data_addr, root.PAGE_SIZE) / root.PAGE_SIZE;
         const page_count = divRoundUp(mod.data_len, root.PAGE_SIZE);
         for (start_page..start_page + page_count) |p| markUsed(p);
         pages_in_use += page_count;
     }
 
-    pages_in_use += kernel_end_page;
+    const vga_start = std.mem.alignBackward(usize, 0x3FF000, root.PAGE_SIZE) / root.PAGE_SIZE;
+    for (vga_start..vga_start + divRoundUp(root.console.VGA_SIZE, root.PAGE_SIZE)) |page| {
+        markUsed(page);
+        pages_in_use += 1;
+    }
 }
 
 fn markUsed(page: usize) void {
     const unit = page / @bitSizeOf(BitmapUnit);
     const bit = page % @bitSizeOf(BitmapUnit);
     bitmap[unit] |= @as(u8, @intCast(@as(u16, 1) << @as(u4, @intCast(bit))));
+}
+
+fn isAddressUsed(addr: usize) bool {
+    const aligned_addr = std.mem.alignBackward(usize, addr, root.PAGE_SIZE);
+    const page = aligned_addr / root.PAGE_SIZE;
+    return isUsed(page);
+}
+
+fn isUsed(page: usize) bool {
+    const unit = page / @bitSizeOf(BitmapUnit);
+    const bit = page % @bitSizeOf(BitmapUnit);
+    return (bitmap[unit] & @as(u8, @intCast(@as(u16, 1) << @as(u4, @intCast(bit))))) != 0;
 }
 
 pub fn alloc(size: usize) !usize {
@@ -168,7 +185,7 @@ pub fn alloc(size: usize) !usize {
         }
     }
 
-    console.println("[pmm] Unable to allocate {Bi:.1}", .{size});
+    console.serialPrintln("[pmm] Unable to allocate {Bi:.1}", .{size});
     return error.OutOfMemory;
 }
 
@@ -177,7 +194,7 @@ pub fn free(address: usize, size: usize) !void {
     const page_count = divRoundUp(size, root.PAGE_SIZE);
 
     if (page_count >= bitmap.len * @bitSizeOf(BitmapUnit)) {
-        console.println("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
+        console.serialPrintln("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
         return error.OutOfRange;
     }
 

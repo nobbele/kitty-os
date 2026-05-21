@@ -1,8 +1,8 @@
 .{
-    .name = .shell,
-    .version = "0.0.0",
-    .fingerprint = 0x4592b2fd4c32c273,
+    .name = .hello_world,
+    .version = "0.0.1",
     .minimum_zig_version = "0.16.0",
+    .fingerprint = 0xf73eae91b2568afe,
     .dependencies = .{
         .kittylib = .{ .path = "../../lib" },
     },

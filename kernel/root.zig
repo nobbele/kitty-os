@@ -8,7 +8,6 @@ const main = @import("main.zig");
 pub const multiboot = @import("multiboot.zig");
 pub const process = @import("process.zig");
 pub const scheduler = @import("scheduler.zig");
-pub const shell = @import("shell.zig");
 pub const syscall = @import("syscall.zig");
 
 comptime {
@@ -24,6 +23,7 @@ pub const os = struct {
             .vtable = &PageAllocator.vtable,
         };
     };
+    pub const PATH_MAX: usize = 256;
 };
 
 pub const std_options: std.Options = .{

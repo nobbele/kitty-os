@@ -22,7 +22,7 @@ fn keyboardIrq(frame: *idt.InterruptFrame) void {
         return;
 
     const scancode = port.inb(DATA_PORT);
-    // console.println("[ps2] scancode: {X}", .{data});
+    // console.serialPrintln("[ps2] scancode: {X}", .{data});
 
     keyboard.pushScancode(scancode);
 }

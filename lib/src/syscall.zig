@@ -20,11 +20,13 @@ pub fn write(fd: u32, buffer: []const u8) void {
     );
 }
 
-pub fn exec() void {
+pub fn exec(path: []const u8) void {
     asm volatile (
         \\ int $0x80
         :
         : [syscall] "{eax}" (2),
+          [buf] "{ebx}" (path.ptr),
+          [len] "{ecx}" (path.len),
     );
 }
 

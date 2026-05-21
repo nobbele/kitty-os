@@ -22,15 +22,15 @@ pub fn init() !void {
         };
     }
 
-    console.println("[vmm] Mapping VGA buffer", .{});
+    console.serialPrintln("[vmm] Mapping VGA buffer", .{});
     try mapInto(kernel_entries, 0xC03FF000, 0x000B8000, .{ .overwrite = true });
 
-    console.println("[vmm] Creating kernel address space", .{});
+    console.serialPrintln("[vmm] Creating kernel address space", .{});
     kernel_address_space = try AddressSpace.init();
 
-    console.println("[vmm] Loading kernel address space", .{});
+    console.serialPrintln("[vmm] Loading kernel address space", .{});
     kernel_address_space.load();
-    console.println("[vmm] Done", .{});
+    console.serialPrintln("[vmm] Done", .{});
 }
 
 fn mapInto(pd: [*]mmu.PageDirEntry, virt: usize, phys: usize, opts: MappingOptions) !void {

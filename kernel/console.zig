@@ -2,13 +2,13 @@ const std = @import("std");
 const root = @import("root");
 const port = root.arch.port;
 
-const VGA_WIDTH = 80;
-const VGA_HEIGHT = 25;
-const VGA_SIZE = VGA_WIDTH * VGA_HEIGHT;
+pub const VGA_WIDTH = 80;
+pub const VGA_HEIGHT = 25;
+pub const VGA_SIZE = VGA_WIDTH * VGA_HEIGHT;
 
-var g_row: usize = 0;
-var g_column: usize = 0;
-var g_color: Color = .init(.light_gray, .black);
+var g_row: usize = undefined;
+var g_column: usize = undefined;
+var g_color: Color = undefined;
 var g_buffer = @as([*]volatile u16, @ptrFromInt(0xC03FF000));
 
 pub const ColorType = enum(u4) {
@@ -46,7 +46,7 @@ const Color = packed struct(u8) {
 
 /// Initialize VGA
 pub fn init() void {
-    clear();
+    reset();
 }
 
 /// Set Color for VGA
@@ -55,8 +55,11 @@ pub fn setColor(fg: Color, bg: Color) void {
 }
 
 /// Clear the screen
-pub fn clear() void {
+pub fn reset() void {
     @memset(g_buffer[0..VGA_SIZE], Color.getVgaChar(g_color, ' '));
+    g_column = 0;
+    g_row = 0;
+    g_color = .init(.light_gray, .black);
 }
 
 /// Print character with color at specific position
@@ -86,6 +89,10 @@ pub fn printChar(char: u8) void {
             g_column = 0;
             g_row += 1;
             checkAndScroll();
+        },
+        // BS
+        8 => {
+            deleteChar();
         },
         else => {
             printCharAt(char, g_color, g_column, g_row);

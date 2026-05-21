@@ -11,14 +11,15 @@ var current_idx: usize = 0;
 
 pub fn addTask(task: *Task) !void {
     try tasks.append(std.heap.page_allocator, task);
+    console.serialPrintln("[sched] Added task #{}", .{tasks.items.len});
 }
 
-pub fn removeTask(task: *Task) !void {
-    const idx = for (0..tasks.items.len) |i| {
-        if (tasks.items[i] == task) break i;
-    } else return error.NotFound;
-    tasks.swapRemove(idx);
-}
+// pub fn removeTask(task: *Task) !void {
+//     const idx = for (0..tasks.items.len) |i| {
+//         if (tasks.items[i] == task) break i;
+//     } else return error.NotFound;
+//     tasks.swapRemove(idx);
+// }
 
 pub fn currentTask() ?*Task {
     if (tasks.items.len == 0) return null;
@@ -26,6 +27,7 @@ pub fn currentTask() ?*Task {
 }
 
 pub fn removeCurrentTask() *Task {
+    console.serialPrintln("[sched] Removing task #{}", .{current_idx + 1});
     return tasks.swapRemove(current_idx);
 }
 
@@ -42,14 +44,20 @@ pub fn findNextTask() ?*Task {
 }
 
 pub fn schedule(frame: *idt.InterruptFrame) void {
-    if (tasks.items.len == 0) {
-        console.println("[sched] No more tasks, shutting down", .{});
+    if (tasks.items.len != 0) {
+        // Save current task
+        tasks.items[current_idx].frame = frame.*;
+    }
+
+    scheduleNext(frame);
+}
+
+pub fn scheduleNext(frame: *idt.InterruptFrame) void {
+    while (tasks.items.len == 0) {
+        console.serialPrintln("[sched] No more tasks, shutting down", .{});
         root.arch.port.outw(0x604, 0x2000);
         asm volatile ("hlt");
     }
-
-    // Save current task
-    tasks.items[current_idx].frame = frame.*;
 
     // Find the next task
     const next = while (true) {
@@ -64,11 +72,11 @@ pub fn schedule(frame: *idt.InterruptFrame) void {
             break task;
         }
 
-        // console.println("[sched] Nothing to schedule, halting", .{});
+        // console.serialPrintln("[sched] Nothing to schedule, halting", .{});
         asm volatile ("sti; hlt");
     };
 
-    // console.serialPrintln("Scheduling {} / {}", .{ current_idx + 1, tasks.items.len });
+    // console.serialPrintln("Scheduling #{} / {}", .{ current_idx + 1, tasks.items.len });
 
     switchTo(next);
 
@@ -118,9 +126,9 @@ const Stack = struct {
     virt_top: usize,
 
     pub fn init(address_space: *const vmm.AddressSpace) !Stack {
-        const size = 2 * 4096 - 4;
+        const size = 2 * 4096;
         const phys = try pmm.alloc(size);
-        const virt_top = root.KERNEL_BASE - 4;
+        const virt_top = root.KERNEL_BASE;
         const virt_start = virt_top - size;
 
         if (!std.mem.isAligned(virt_start, root.PAGE_SIZE))
