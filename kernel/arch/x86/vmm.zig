@@ -109,6 +109,10 @@ pub const AddressSpace = struct {
         return self;
     }
 
+    pub fn free(self: *AddressSpace) !void {
+        try pmm.free(self.page_dir, mmu.PAGE_DIRECTORY_COUNT * @sizeOf(u32));
+    }
+
     pub fn dirEntries(self: *const AddressSpace) *[mmu.PAGE_DIRECTORY_COUNT]mmu.PageDirEntry {
         const entries_ptr: [*]mmu.PageDirEntry = @ptrFromInt(root.KERNEL_BASE + self.page_dir);
         return entries_ptr[0..mmu.PAGE_DIRECTORY_COUNT];

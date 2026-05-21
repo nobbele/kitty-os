@@ -13,9 +13,20 @@ pub fn addTask(task: *Task) !void {
     try tasks.append(std.heap.page_allocator, task);
 }
 
+pub fn removeTask(task: *Task) !void {
+    const idx = for (0..tasks.items.len) |i| {
+        if (tasks.items[i] == task) break i;
+    } else return error.NotFound;
+    tasks.swapRemove(idx);
+}
+
 pub fn currentTask() ?*Task {
     if (tasks.items.len == 0) return null;
     return tasks.items[current_idx];
+}
+
+pub fn removeCurrentTask() *Task {
+    return tasks.swapRemove(current_idx);
 }
 
 pub fn findNextTask() ?*Task {
@@ -31,7 +42,11 @@ pub fn findNextTask() ?*Task {
 }
 
 pub fn schedule(frame: *idt.InterruptFrame) void {
-    if (tasks.items.len == 0) return;
+    if (tasks.items.len == 0) {
+        console.println("[sched] No more tasks, shutting down", .{});
+        root.arch.port.outw(0x604, 0x2000);
+        asm volatile ("hlt");
+    }
 
     // Save current task
     tasks.items[current_idx].frame = frame.*;
@@ -49,10 +64,11 @@ pub fn schedule(frame: *idt.InterruptFrame) void {
             break task;
         }
 
+        // console.println("[sched] Nothing to schedule, halting", .{});
         asm volatile ("sti; hlt");
     };
 
-    console.serialPrintln("Scheduling {} / {}", .{ current_idx + 1, tasks.items.len });
+    // console.serialPrintln("Scheduling {} / {}", .{ current_idx + 1, tasks.items.len });
 
     switchTo(next);
 
@@ -77,12 +93,18 @@ pub const Task = struct {
 
     pub fn init() !Task {
         const address_space = try vmm.AddressSpace.init();
-        const user_stack = try setupStack(&address_space);
+        const user_stack = try Stack.init(&address_space);
         return .{
             .kernel_stack = try std.heap.page_allocator.alignedAlloc(u8, std.mem.Alignment.@"16", KERNEL_STACK_SIZE),
             .user_stack = user_stack,
             .address_space = address_space,
         };
+    }
+
+    pub fn free(self: *Task) !void {
+        try self.address_space.free();
+        try self.user_stack.free();
+        // std.heap.page_allocator.free(self.kernel_stack);
     }
 
     pub fn kernelStackTop(self: *const Task) usize {
@@ -92,32 +114,31 @@ pub const Task = struct {
 
 const Stack = struct {
     phys_start: usize,
+    size: usize,
     virt_top: usize,
-};
 
-fn setupStack(address_space: *const vmm.AddressSpace) !Stack {
-    const size = 2 * 4096 - 4;
-    const phys = try pmm.alloc(size);
-    const virt_top = root.KERNEL_BASE - 4;
-    const virt_start = virt_top - size;
+    pub fn init(address_space: *const vmm.AddressSpace) !Stack {
+        const size = 2 * 4096 - 4;
+        const phys = try pmm.alloc(size);
+        const virt_top = root.KERNEL_BASE - 4;
+        const virt_start = virt_top - size;
 
-    if (!std.mem.isAligned(virt_start, root.PAGE_SIZE))
-        @panic("Virtual start of for stack must be aligned to page");
+        if (!std.mem.isAligned(virt_start, root.PAGE_SIZE))
+            @panic("Virtual start of for stack must be aligned to page");
 
-    if (!std.mem.isAligned(phys, root.PAGE_SIZE))
-        @panic("Physical start of stack must be aligned to page");
+        if (!std.mem.isAligned(phys, root.PAGE_SIZE))
+            @panic("Physical start of stack must be aligned to page");
 
-    const page_count = std.math.divCeil(usize, size, root.PAGE_SIZE) catch unreachable;
+        try address_space.mapRange(virt_start, phys, size, .{ .access = .user });
 
-    for (0..page_count) |stack_page| {
-        const page_virt = virt_start + stack_page * root.PAGE_SIZE;
-        const page_phys = phys + stack_page * root.PAGE_SIZE;
-        try address_space.map(page_virt, page_phys, .{ .access = .user });
+        return .{
+            .phys_start = phys,
+            .size = size,
+            .virt_top = virt_top,
+        };
     }
 
-    return .{ .phys_start = phys, .virt_top = virt_top };
-}
-
-// const tasks =
-
-// pub fn addTask()
+    pub fn free(self: *Stack) !void {
+        try pmm.free(self.phys_start, self.size);
+    }
+};

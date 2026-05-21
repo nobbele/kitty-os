@@ -43,8 +43,8 @@ pub fn build(b: *std.Build) void {
     const check = b.step("check", "Check if foo compiles");
     check.dependOn(&kernel_check.step);
 
-    const zigProgramDep = b.dependency("zigProgram", .{ .optimize = optimize });
-    const zigProgramDep_exe = zigProgramDep.artifact("zigProgram");
+    const shell_dep = b.dependency("shell", .{ .optimize = optimize });
+    const shell_exe = shell_dep.artifact("shell");
 
     // == Make ISO ==
     const iso_wf = b.addWriteFiles();
@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
     _ = iso_wf.addCopyFile(b.path("limine/limine-bios.sys"), "limine-bios.sys");
     _ = iso_wf.addCopyFile(b.path("limine/limine.conf"), "limine.conf");
     _ = iso_wf.addCopyFile(kernel.getEmittedBin(), "KittyOS.elf");
-    _ = iso_wf.addCopyFile(zigProgramDep_exe.getEmittedBin(), "program");
+    _ = iso_wf.addCopyFile(shell_exe.getEmittedBin(), "shell");
     iso_wf.step.dependOn(&kernel.step);
 
     const xorriso = b.addSystemCommand(&.{

@@ -6,23 +6,45 @@ const console = root.console;
 
 pub fn init() !void {
     try root.syscall.registerSyscall(.exec, struct {
-        fn syscallExec(args: root.syscall.SyscallArgs) root.syscall.SyscallResult {
+        fn f(args: root.syscall.SyscallArgs) root.syscall.SyscallResult {
             _ = args; // autofix
-            console.println("exec()", .{});
+            // console.println("exec()", .{});
             exec() catch unreachable;
             return .void;
         }
-    }.syscallExec);
+    }.f);
+    try root.syscall.registerSyscall(.exit, struct {
+        fn f(args: root.syscall.SyscallArgs) root.syscall.SyscallResult {
+            const code = args.get(u32, 0);
+            // console.println("exit()", .{});
+            exit(code) catch unreachable;
+            root.scheduler.schedule(args.frame);
+            return .void;
+        }
+    }.f);
     try root.syscall.registerSyscall(.sleep, struct {
-        fn syscallSleep(args: root.syscall.SyscallArgs) root.syscall.SyscallResult {
+        fn f(args: root.syscall.SyscallArgs) root.syscall.SyscallResult {
             const amount = args.get(u32, 0);
             const current_task = root.scheduler.currentTask() orelse unreachable;
-            console.println("sleep({})", .{amount});
+            // console.println("sleep({})", .{amount});
             current_task.sleep_timer = amount;
             root.scheduler.schedule(args.frame);
             return .void;
         }
-    }.syscallSleep);
+    }.f);
+    try root.syscall.registerSyscall(.yield, struct {
+        fn f(args: root.syscall.SyscallArgs) root.syscall.SyscallResult {
+            // console.println("yield()", .{});
+            root.scheduler.schedule(args.frame);
+            return .void;
+        }
+    }.f);
+}
+
+pub fn exit(code: u32) !void {
+    _ = code; // autofix
+    const task = root.scheduler.removeCurrentTask();
+    try task.free();
 }
 
 pub fn exec() !void {

@@ -1,7 +1,7 @@
 .{
-    .name = .zigProgram,
+    .name = .shell,
     .version = "0.0.0",
-    .fingerprint = 0xe833721c065c066c, // Changing this has security and trust implications.
+    .fingerprint = 0x4592b2fd4c32c273, // Changing this has security and trust implications.
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .kittylib = .{ .path = "../../lib" },

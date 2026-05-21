@@ -4,10 +4,10 @@ const root = @import("root");
 pub var syscall_handlers: std.AutoArrayHashMapUnmanaged(Syscall, *const SyscallHandler) = .empty;
 
 pub fn registerSyscall(id: Syscall, h: SyscallHandler) !void {
-    try syscall_handlers.put(std.heap.page_allocator, id, h);
+    try syscall_handlers.putNoClobber(std.heap.page_allocator, id, h);
 }
 
-pub const Syscall = enum(u8) { read, write, exec, sleep, _ };
+pub const Syscall = enum(u8) { read, write, exec, sleep, yield, exit, _ };
 
 pub const SyscallArgs = struct {
     args: [3]usize,
