@@ -2,6 +2,16 @@ const std = @import("std");
 
 const kitty = @import("kitty");
 
+export fn _start() callconv(.naked) void {
+    asm volatile ("call main");
+    asm volatile (
+        \\ int $0x80
+        :
+        : [syscall] "{eax}" (5),
+          [code] "{ebx}" (0),
+    );
+}
+
 export fn main() callconv(.{ .x86_sysv = .{} }) void {
     kitty.println("Welcome to the KittyOS shell!", .{});
 
@@ -13,7 +23,66 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
 
         var it = std.mem.splitScalar(u8, cmdline, ' ');
         const path = it.next() orelse continue;
-        kitty.syscall.exec(path);
+        // const args = it.rest();
+        if (std.mem.eql(u8, path, "stat")) {
+            var opt_filename = it.next();
+            if (opt_filename) |filename| {
+                if (filename.len == 0)
+                    opt_filename = null;
+            }
+
+            const filename = opt_filename orelse {
+                kitty.println("Missing required argument 'filename'", .{});
+                continue;
+            };
+
+            const fd = kitty.syscall.open(filename);
+
+            var stat: kitty.fs.Stat = undefined;
+            kitty.syscall.stat(fd, &stat);
+
+            kitty.println("File {s} ({s})", .{ filename, @tagName(stat.kind) });
+            kitty.println("Size: {Bi:.1} ({} bytes)", .{ stat.size, stat.size });
+        } else if (std.mem.eql(u8, path, "read")) {
+            var opt_filename = it.next();
+            if (opt_filename) |filename| {
+                if (filename.len == 0)
+                    opt_filename = null;
+            }
+
+            const filename = opt_filename orelse {
+                kitty.println("Missing required argument 'filename'", .{});
+                continue;
+            };
+
+            const fd = kitty.syscall.open(filename);
+
+            var stat: kitty.fs.Stat = undefined;
+            kitty.syscall.stat(fd, &stat);
+
+            // TODO dynamically allocate buffer
+            var read_buffer: [256]u8 = undefined;
+
+            const bytes_read = kitty.syscall.read(fd, &read_buffer);
+            if (bytes_read == 0) {
+                kitty.println("Failed to read", .{});
+                continue;
+            }
+
+            const data = read_buffer[0..bytes_read];
+
+            if (stat.kind == .directory) {
+                const entries = std.mem.bytesAsSlice(kitty.fs.DirEntry, data);
+                for (entries) |entry| {
+                    const name = entry.name[0..entry.name_len];
+                    kitty.println("{s}", .{name});
+                }
+            } else {
+                kitty.println("{X}", .{data});
+            }
+        } else {
+            kitty.syscall.exec(path);
+        }
 
         // TODO wait for processes
         for (0..3) |_| kitty.syscall.yield();

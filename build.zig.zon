@@ -6,6 +6,7 @@
     .minimum_zig_version = "0.16.0",
 
     .dependencies = .{
+        .kittylib = .{ .path = "lib" },
         .shell = .{ .path = "userprog/shell" },
         .hello_world = .{ .path = "userprog/hello-world" },
     },

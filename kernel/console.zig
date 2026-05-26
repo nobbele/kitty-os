@@ -203,11 +203,11 @@ const drain_vtable: std.Io.Writer.VTable = .{ .drain = drain };
 const serial_drain_vtable: std.Io.Writer.VTable = .{ .drain = serialDrain };
 
 /// Returns std.Io.Writer implementation for this console
-pub fn writer(buffer: []u8, serial: bool) std.Io.Writer {
+pub fn writer(buffer: []u8, serial_only: bool) std.Io.Writer {
     return .{
         .buffer = buffer,
         .end = 0,
-        .vtable = if (serial) &serial_drain_vtable else &drain_vtable,
+        .vtable = if (serial_only) &serial_drain_vtable else &drain_vtable,
     };
 }
 

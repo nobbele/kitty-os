@@ -1,22 +1,13 @@
 const std = @import("std");
 
+pub const fs = @import("filesystem.zig");
 pub const syscall = @import("syscall.zig");
-
-export fn _start() callconv(.naked) void {
-    asm volatile ("call main");
-    asm volatile (
-        \\ int $0x80
-        :
-        : [syscall] "{eax}" (5),
-          [code] "{ebx}" (0),
-    );
-}
 
 pub fn readLine(buffer: []u8) !u32 {
     var char: u8 = undefined;
     var count: usize = 0;
     while (count < buffer.len) {
-        const res = syscall.read(0, @as(*[1]u8, &char));
+        const res = syscall.read(fs.STDIN, @as(*[1]u8, &char));
 
         if (res == 0) {
             syscall.yield();
@@ -30,7 +21,7 @@ pub fn readLine(buffer: []u8) !u32 {
             } else continue;
         }
 
-        syscall.write(1, @as(*[1]u8, &char));
+        syscall.write(fs.STDOUT, @as(*[1]u8, &char));
 
         if (char == '\n')
             break;
@@ -55,13 +46,13 @@ fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
 
     // If buffer is not empty write it first
     if (w.end != 0) {
-        syscall.write(1, w.buffered());
+        syscall.write(fs.STDOUT, w.buffered());
         w.end = 0;
     }
 
     // Now write all data except last element
     for (data[0 .. data.len - 1]) |bytes| {
-        syscall.write(1, bytes);
+        syscall.write(fs.STDOUT, bytes);
         consumed += bytes.len;
     }
 
@@ -70,7 +61,7 @@ fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) !usize {
         0 => {},
         else => {
             for (0..splat) |_| {
-                syscall.write(1, pattern);
+                syscall.write(fs.STDOUT, pattern);
             }
         },
     }

@@ -1,8 +1,7 @@
-const root = @import("../../root.zig");
-const scheduler = @import("../../scheduler.zig");
+const root = @import("root");
 
-pub fn startTask(task: *scheduler.Task) noreturn {
-    scheduler.switchTo(task);
+pub fn startTask(task: *root.process.Task) noreturn {
+    root.scheduler.switchTo(task);
     asm volatile (
         \\ mov %[ds], %%ds
         \\ mov %[ds], %%es

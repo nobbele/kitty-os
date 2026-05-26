@@ -27,6 +27,10 @@ pub fn build(b: *std.Build) void {
     });
     kernel.setLinkerScript(b.path("kernel/linker.ld"));
     kernel.root_module.addAssemblyFile(b.path("kernel/boot.s"));
+
+    const kitty_lib = b.dependency("kittylib", .{ .optimize = .ReleaseSmall });
+    kernel.root_module.addImport("lib", kitty_lib.module("kitty"));
+
     b.installArtifact(kernel);
 
     const kernel_check = b.addExecutable(.{

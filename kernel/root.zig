@@ -1,13 +1,17 @@
 const std = @import("std");
 
+pub const lib = @import("lib");
+
 pub const arch = @import("arch/x86/root.zig");
 pub const console = @import("console.zig");
-pub const fs = @import("filesystem.zig");
+pub const fs = @import("filesystem/root.zig");
 pub const keyboard = @import("keyboard.zig");
 const main = @import("main.zig");
 pub const multiboot = @import("multiboot.zig");
 pub const process = @import("process.zig");
 pub const scheduler = @import("scheduler.zig");
+pub const sparse_list = @import("sparse_list.zig");
+pub const SparseList = sparse_list.SparseList;
 pub const syscall = @import("syscall.zig");
 
 comptime {
@@ -53,9 +57,17 @@ pub fn kernelSize() usize {
 pub const panic = std.debug.FullPanic(kpanic);
 
 pub fn kpanic(msg: []const u8, first_trace_addr: ?usize) noreturn {
-    _ = first_trace_addr;
+    asm volatile ("cli");
 
-    console.println("Panic! {s}", .{msg});
+    console.println("Panic at 0x{X}: {s}", .{ first_trace_addr orelse 0, msg });
+
+    // const opt_trace: ?*std.builtin.StackTrace = @errorReturnTrace();
+    // if (opt_trace) |trace| {
+    //     console.println("Stack trace: ", .{});
+    //     for (trace.instruction_addresses) |address| {
+    //         console.println("0x{X}", .{address});
+    //     }
+    // }
 
     while (true) {
         asm volatile ("hlt");
