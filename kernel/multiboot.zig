@@ -72,7 +72,7 @@ pub fn init(multiboot_info_address: usize) void {
         const entry: *const MultibootTag = @ptrFromInt(entry_address);
         if (entry.type == .end) break;
 
-        console.serialPrintln("[multiboot] Type {}", .{entry.type});
+        console.println("[multiboot] Type {}", .{entry.type});
 
         blk: switch (entry.type) {
             .cmdline => commandLine = @ptrFromInt(entry_address + TAG_SIZE),
@@ -92,7 +92,7 @@ pub fn init(multiboot_info_address: usize) void {
                 const mod_end: *u32 = @ptrFromInt(entry_address + TAG_SIZE + @sizeOf(u32));
                 const string: [*:0]u8 = @ptrFromInt(entry_address + TAG_SIZE + 2 * @sizeOf(u32));
 
-                console.serialPrintln("Loading module \"{s}\"", .{string});
+                console.println("Loading module \"{s}\"", .{string});
 
                 const module = MultibootModuleEntry{
                     .data_addr = mod_start.*,

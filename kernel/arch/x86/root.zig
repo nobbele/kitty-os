@@ -13,26 +13,26 @@ pub const timer = @import("timer.zig");
 pub const vmm = @import("vmm.zig");
 
 pub fn init() !void {
-    console.serialPrintln("[pmm] init", .{});
+    console.println("[pmm] init", .{});
     pmm.init(multiboot.memoryUpper * 1024, multiboot.entries);
 
-    console.serialPrintln("[vmm] init", .{});
+    console.println("[vmm] init", .{});
     vmm.init() catch unreachable;
 
-    console.serialPrintln("[gdt] init", .{});
+    console.println("[gdt] init", .{});
     gdt.init() catch unreachable;
 
-    console.serialPrintln("[idt] init", .{});
+    console.println("[idt] init", .{});
     idt.init() catch unreachable;
 
-    console.serialPrintln("[pic] init", .{});
+    console.println("[pic] init", .{});
     pic.init();
 
-    console.serialPrintln("[timer] init", .{});
+    console.println("[timer] init", .{});
     timer.init();
 
     asm volatile ("sti");
 
-    console.serialPrintln("[ps2] init", .{});
+    console.println("[ps2] init", .{});
     ps2.init();
 }

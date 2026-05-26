@@ -102,16 +102,16 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
         }
     }
 
-    console.serialPrintln("{any}", .{memory_maps});
+    console.println("{any}", .{memory_maps});
 
     if (bitmap_map == null) {
         @panic("[pmm] not enough memory to initialize bitmap");
     }
 
-    console.serialPrintln("[pmm] Available memory: {Bi:.1}", .{total_size});
-    console.serialPrintln("[pmm] Reserved for bitmap: {Bi:.1}", .{bitmap_size});
+    console.println("[pmm] Available memory: {Bi:.1}", .{total_size});
+    console.println("[pmm] Reserved for bitmap: {Bi:.1}", .{bitmap_size});
 
-    console.serialPrintln("[pmm,bitmap] init", .{});
+    console.println("[pmm,bitmap] init", .{});
     initBitmap(0xC0000000 + bitmap_map.?.address, memory_maps[0..number_of_maps]);
 
     // low 1MB: BIOS, IVT, VGA

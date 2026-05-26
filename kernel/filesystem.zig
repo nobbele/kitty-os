@@ -10,7 +10,7 @@ pub fn init() !void {
     try syscall.registerSyscall(syscall.Syscall.write, syscallWrite);
     try syscall.registerSyscall(syscall.Syscall.read, syscallRead);
 
-    console.serialPrintln("[fs] Loading RAMFS", .{});
+    console.println("[fs] Loading RAMFS", .{});
     try loadRamfs();
 }
 
@@ -119,7 +119,7 @@ fn loadRamfs() !void {
         .link_name_buffer = &link_name_buffer,
     });
     while (try it.next()) |entry| {
-        console.serialPrintln("[fs,ramfs] name: {s}", .{entry.name});
+        console.println("[fs,ramfs] name: {s}", .{entry.name});
 
         const name = try std.heap.page_allocator.dupe(u8, entry.name);
 
@@ -132,7 +132,7 @@ fn loadRamfs() !void {
         fs_root.children.append(&fs_node.node);
     }
 
-    console.serialPrintln("{f}", .{fs_root});
+    console.println("{f}", .{fs_root});
 }
 
 fn syscallWrite(args: syscall.SyscallArgs) syscall.SyscallResult {
