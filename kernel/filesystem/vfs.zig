@@ -6,7 +6,7 @@ const fs = root.fs;
 var ramfs_instance: *fs.vfs.Filesystem = undefined;
 
 pub fn init() !void {
-    console.println("[vfs] Loading RAMFS", .{});
+    root.terminal.println("[vfs] Loading RAMFS", .{});
     ramfs_instance = try fs.ramfs.init();
 }
 

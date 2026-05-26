@@ -11,20 +11,21 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
 
     root.arch.init() catch unreachable;
 
-    console.println("[fs] init", .{});
-    root.fs.init() catch unreachable;
-
     console.println("[terminal] init", .{});
     root.terminal.init() catch unreachable;
 
     root.terminal.putImage(@ptrCast(@alignCast(catgirl)), 183, 243);
+    root.terminal.println("Welcome to KittyOS :3", .{});
+
+    root.terminal.println("[fs] init", .{});
+    root.fs.init() catch unreachable;
 
     root.process.init() catch unreachable;
 
-    root.terminal.println("[kernel] Loading shell", .{});
+    root.terminal.println("[proc] Loading shell", .{});
     const init = root.process.exec("/shell") catch |e| std.debug.panic("Failed to execute ELF: {}", .{e});
 
-    console.println("[proc] Switching to user-mode", .{});
+    root.terminal.println("[proc] Switching to user-mode", .{});
     root.arch.process.startTask(init);
 
     unreachable;

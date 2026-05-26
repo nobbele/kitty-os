@@ -19,7 +19,7 @@ pub fn init() !void {
     try syscall.registerSyscall(syscall.Syscall.stat, syscallStat);
     try syscall.registerSyscall(syscall.Syscall.open, syscallOpen);
 
-    console.println("[fs] Loading VFS", .{});
+    root.terminal.println("[fs] Loading VFS", .{});
     try vfs.init();
 }
 
