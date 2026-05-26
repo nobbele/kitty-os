@@ -41,7 +41,7 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
             var stat: kitty.fs.Stat = undefined;
             kitty.syscall.stat(fd, &stat);
 
-            kitty.println("File {s} ({s})", .{ filename, @tagName(stat.kind) });
+            kitty.println("File: {s} ({s})", .{ filename, @tagName(stat.kind) });
             kitty.println("Size: {Bi:.1} ({} bytes)", .{ stat.size, stat.size });
         } else if (std.mem.eql(u8, path, "read")) {
             var opt_filename = it.next();

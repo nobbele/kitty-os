@@ -18,7 +18,9 @@ pub fn readLine(buffer: []u8) !u32 {
         if (char == 8) {
             if (count > 0) {
                 count -= 1;
-            } else continue;
+                syscall.write(fs.STDOUT, @as(*[1]u8, &char));
+            }
+            continue;
         }
 
         syscall.write(fs.STDOUT, @as(*[1]u8, &char));
