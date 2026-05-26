@@ -103,12 +103,13 @@ pub fn build(b: *std.Build) void {
         "qemu-system-i386",
         "-cpu", "pentium2",
         "-m",   "128M",
+        "-device", "VGA,xres=640,yres=480",
         "-cdrom", "KittyOS.iso",
         "-boot", "d",
         "-no-reboot",
         "-no-shutdown",
         "-debugcon", "stdio",
-        "-monitor", "telnet:127.0.0.1:55555,server,nowait"
+        "-monitor", "telnet:127.0.0.1:55555,server,nowait",
         // "-serial", "stdio",
     });
     

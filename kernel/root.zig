@@ -13,6 +13,7 @@ pub const scheduler = @import("scheduler.zig");
 pub const sparse_list = @import("sparse_list.zig");
 pub const SparseList = sparse_list.SparseList;
 pub const syscall = @import("syscall.zig");
+pub const terminal = @import("terminal.zig");
 
 comptime {
     @export(&multiboot.multiboot, .{ .name = "multiboot" });

@@ -1,6 +1,7 @@
 const std = @import("std");
 const root = @import("root");
 const console = root.console;
+const multiboot = root.multiboot;
 
 const mmu = @import("mmu.zig");
 const pmm = @import("pmm.zig");
@@ -23,7 +24,9 @@ pub fn init() !void {
     }
 
     console.println("[vmm] Mapping VGA buffer", .{});
-    try mapInto(kernel_entries, 0xC03FF000, 0x000B8000, .{ .overwrite = true });
+    const framebuffer_size = multiboot.framebuffer.height * multiboot.framebuffer.pitch;
+    const vga_phys: usize = @intCast(multiboot.framebuffer.addr);
+    try mapRangeInto(kernel_entries, vga_phys, vga_phys, framebuffer_size, .{ .overwrite = true });
 
     console.println("[vmm] Creating kernel address space", .{});
     kernel_address_space = try AddressSpace.init();
@@ -70,6 +73,14 @@ fn mapInto(pd: [*]mmu.PageDirEntry, virt: usize, phys: usize, opts: MappingOptio
 
     pte.flags = .{ .present = true, .writable = opts.writable, .access = opts.access };
     pte.address_high = @truncate(phys >> 12);
+}
+
+fn mapRangeInto(pd: [*]mmu.PageDirEntry, virt: usize, phys: usize, length: usize, opts: MappingOptions) !void {
+    const aligned_length = std.mem.alignForward(usize, length, root.PAGE_SIZE);
+    var offset: usize = 0;
+    while (offset < aligned_length) : (offset += root.PAGE_SIZE) {
+        try mapInto(pd, virt + offset, phys + offset, opts);
+    }
 }
 
 fn unmapFrom(pd: [*]mmu.PageDirEntry, virt: usize) !void {
@@ -119,11 +130,8 @@ pub const AddressSpace = struct {
     }
 
     pub fn mapRange(self: *const AddressSpace, virt: usize, phys: usize, length: usize, opts: MappingOptions) !void {
-        const aligned_length = std.mem.alignForward(usize, length, root.PAGE_SIZE);
-        var offset: usize = 0;
-        while (offset < aligned_length) : (offset += root.PAGE_SIZE) {
-            try self.map(virt + offset, phys + offset, opts);
-        }
+        const pd = self.dirEntries();
+        try mapRangeInto(pd, virt, phys, length, opts);
     }
 
     pub fn unmapRange(self: *const AddressSpace, virt: usize, length: usize) !void {

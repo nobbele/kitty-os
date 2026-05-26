@@ -59,7 +59,7 @@ pub const InterruptFrame = extern struct {
     // CPU pushed these:
     eip: usize,
     cs: usize,
-    flags: usize,
+    flags: root.arch.EFlags,
 
     // only present on privilege change (ring 3 → ring 0):
     esp: usize,
@@ -85,7 +85,7 @@ pub const InterruptFrame = extern struct {
             \\|--------------------|
             \\| ip    | 0x{[eip]X:0>8} |
             \\| cs    | 0x{[cs]X:0>8} |
-            \\| flags | 0x{[flags]X:0>8} |
+            \\| flags | 0x{[flags]f:0>8} |
             \\|--------------------|
             \\| esp   | 0x{[esp]X:0>8} |
             \\| ss    | 0x{[ss]X:0>8} |

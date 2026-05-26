@@ -12,7 +12,7 @@ var current_idx: usize = 0;
 
 pub fn addTask(task: *process.Task) !void {
     try tasks.append(std.heap.page_allocator, task);
-    console.serialPrintln("[sched] Added task #{}", .{tasks.items.len});
+    console.println("[sched] Added task #{}", .{tasks.items.len});
 }
 
 pub fn currentTask() *process.Task {
@@ -22,7 +22,7 @@ pub fn currentTask() *process.Task {
 }
 
 pub fn removeCurrentTask() *process.Task {
-    console.serialPrintln("[sched] Removing task #{}", .{current_idx + 1});
+    console.println("[sched] Removing task #{}", .{current_idx + 1});
     return tasks.swapRemove(current_idx);
 }
 
@@ -49,7 +49,7 @@ pub fn schedule(frame: *idt.InterruptFrame) void {
 
 pub fn scheduleNext(frame: *idt.InterruptFrame) void {
     while (tasks.items.len == 0) {
-        console.serialPrintln("[sched] No more tasks, shutting down", .{});
+        console.println("[sched] No more tasks, shutting down", .{});
         root.arch.port.outw(0x604, 0x2000);
         asm volatile ("hlt");
     }

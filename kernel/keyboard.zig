@@ -78,7 +78,7 @@ pub fn tryReadKey() ?u8 {
 
     const char = map[data];
     if (char == 0) {
-        console.serialPrintln("[keyboard] Invalid key", .{});
+        console.println("[keyboard] Invalid key", .{});
         return null;
     }
 

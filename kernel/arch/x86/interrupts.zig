@@ -100,7 +100,7 @@ fn handleException(frame: *idt.InterruptFrame, exception: Exception, code: u32) 
             );
 
             if (fault_addr >= root.KERNEL_BASE and !err.present) {
-                console.serialPrintln("[int] Copying kernel mapping for {}", .{fault_addr});
+                console.println("[int] Copying kernel mapping for {}", .{fault_addr});
                 const pdi = fault_addr >> 22;
                 const kernel_pde = vmm.kernel_entries[pdi];
                 if (kernel_pde.flags.present) {

@@ -98,7 +98,7 @@ fn syscallOpen(args: syscall.SyscallArgs) syscall.SyscallResult {
 }
 
 fn writeStdout(buf: []const u8) syscall.SyscallResult {
-    console.printString(buf);
+    root.terminal.printString(buf);
     return .{ .ok = buf.len };
 }
 

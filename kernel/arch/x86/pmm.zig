@@ -12,14 +12,15 @@ pub var total_size: usize = 0;
 pub var total_pages: usize = 0;
 pub var pages_in_use: usize = 0;
 
-var bitmap_size: usize = 0;
-var bitmap_size_pages: usize = 0;
+const bitmap_size: usize = divRoundUp(std.math.maxInt(usize) / root.PAGE_SIZE, @bitSizeOf(BitmapUnit));
+const bitmap_size_pages: usize = divRoundUp(bitmap_size, root.PAGE_SIZE);
 
 fn initBitmap(bitmap_address: usize, memory_maps: []Map) void {
     bitmap = @as([*]allowzero volatile BitmapUnit, @ptrFromInt(bitmap_address))[0..bitmap_size];
 
     var address: usize = 0;
 
+    console.println("[pmm,bitmap] Setting up initial address map", .{});
     for (bitmap) |*bitmap_unit| {
         var unit: BitmapUnit = 0;
 
@@ -30,17 +31,18 @@ fn initBitmap(bitmap_address: usize, memory_maps: []Map) void {
                 }
             } else false;
 
-            const mask: u8 = @intCast(@as(u16, 1) << @as(u4, @intCast(bit)));
+            const mask: u8 = @as(BitmapUnit, 1) << @intCast(bit);
             if (!address_free) {
                 unit |= mask;
             }
 
-            address += root.PAGE_SIZE;
+            address +%= root.PAGE_SIZE;
         }
 
         bitmap_unit.* = unit;
     }
 
+    console.println("[pmm,bitmap] Allocating pages for storing the bitmap", .{});
     var satisfied_pages: usize = 0;
 
     // Allocate the pages used for storing the bitmap itself.
@@ -93,8 +95,6 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
             total_size += size;
 
             total_pages = total_size / root.PAGE_SIZE;
-            bitmap_size = divRoundUp(total_pages, @bitSizeOf(BitmapUnit));
-            bitmap_size_pages = divRoundUp(bitmap_size, root.PAGE_SIZE);
 
             if (bitmap_map == null and bitmap_size <= size) {
                 bitmap_map = map;
@@ -104,15 +104,15 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
 
     console.println("{any}", .{memory_maps});
 
+    console.println("[pmm] Available memory: {Bi:.1}", .{total_size});
+    console.println("[pmm] Reserved for bitmap: {Bi:.1}", .{bitmap_size});
+
     if (bitmap_map == null) {
         @panic("[pmm] not enough memory to initialize bitmap");
     }
 
-    console.println("[pmm] Available memory: {Bi:.1}", .{total_size});
-    console.println("[pmm] Reserved for bitmap: {Bi:.1}", .{bitmap_size});
-
     console.println("[pmm,bitmap] init", .{});
-    initBitmap(0xC0000000 + bitmap_map.?.address, memory_maps[0..number_of_maps]);
+    initBitmap(root.KERNEL_BASE + bitmap_map.?.address, memory_maps[0..number_of_maps]);
 
     // low 1MB: BIOS, IVT, VGA
     // kernel image: 1MB to kernel_end
@@ -128,8 +128,8 @@ pub fn init(max_memory_address: usize, entries: []multiboot.MultibootMemoryMapEn
         pages_in_use += page_count;
     }
 
-    const vga_start = std.mem.alignBackward(usize, 0x3FF000, root.PAGE_SIZE) / root.PAGE_SIZE;
-    for (vga_start..vga_start + divRoundUp(root.console.VGA_SIZE, root.PAGE_SIZE)) |page| {
+    const vga_start = std.mem.alignBackward(usize, @intCast(multiboot.framebuffer.addr), root.PAGE_SIZE) / root.PAGE_SIZE;
+    for (vga_start..vga_start + divRoundUp(multiboot.framebuffer.height * multiboot.framebuffer.pitch, root.PAGE_SIZE)) |page| {
         markUsed(page);
         pages_in_use += 1;
     }
@@ -185,7 +185,7 @@ pub fn alloc(size: usize) !usize {
         }
     }
 
-    console.serialPrintln("[pmm] Unable to allocate {Bi:.1}", .{size});
+    console.println("[pmm] Unable to allocate {Bi:.1}", .{size});
     return error.OutOfMemory;
 }
 
@@ -194,7 +194,7 @@ pub fn free(address: usize, size: usize) !void {
     const page_count = divRoundUp(size, root.PAGE_SIZE);
 
     if (page_count >= bitmap.len * @bitSizeOf(BitmapUnit)) {
-        console.serialPrintln("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
+        console.println("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
         return error.OutOfRange;
     }
 
