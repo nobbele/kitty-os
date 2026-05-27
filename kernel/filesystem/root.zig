@@ -9,6 +9,8 @@ pub const DirEntry = lib.DirEntry;
 pub const STDIN = lib.STDIN;
 pub const STDOUT = lib.STDOUT;
 
+pub const devfs = @import("devfs.zig");
+pub const Devfs = devfs.Devfs;
 pub const ramfs = @import("ramfs.zig");
 pub const vfs = @import("vfs.zig");
 pub const Node = vfs.Node;
@@ -58,19 +60,19 @@ fn syscallRead(args: syscall.SyscallArgs) syscall.SyscallResult {
 }
 
 fn syscallStat(args: syscall.SyscallArgs) syscall.SyscallResult {
-    const fd = args.get(u32, 0);
-
-    const stat_ptr = args.get(*lib.Stat, 1);
-
-    if (fd < lib.StdFd.count)
-        return .{ .err = 2 };
+    const path_ptr = args.get([*]const u8, 0);
+    const path_len = args.get(u32, 1);
+    const path = path_ptr[0..path_len];
+    const stat_ptr = args.get(*lib.Stat, 2);
 
     const task = root.scheduler.currentTask();
-    const node = task.open_files.array.items[fd - lib.StdFd.count] orelse {
+    const node = task.fs_namespace.lookup(path) catch {
         return .{ .err = 1 };
+    } orelse {
+        return .{ .err = 2 };
     };
 
-    stat_ptr.* = node.fs.ops.stat(node) catch {
+    stat_ptr.* = node.ops.stat(node) catch {
         return .{ .err = 3 };
     };
 

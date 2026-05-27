@@ -22,16 +22,22 @@ pub const Task = struct {
     open_files: root.SparseList(*root.fs.Node),
 
     pub fn init() !Task {
-        const allocator = std.heap.page_allocator;
+        const gpa = std.heap.page_allocator;
 
         const address_space = try vmm.AddressSpace.init();
         const user_stack = try Stack.init(&address_space);
+        var fs_namespace = try root.fs.vfs.Namespace.init(gpa);
+
+        var fs_root = try fs_namespace.lookup("/") orelse unreachable;
+        const fs_dev = try fs_root.fs.ops.create(fs_root, "dev", .dir);
+        try fs_namespace.mount(fs_dev, &root.fs.devfs.global_devfs.fs);
+
         return .{
-            .allocator = allocator,
-            .kernel_stack = try allocator.alignedAlloc(u8, std.mem.Alignment.@"16", KERNEL_STACK_SIZE),
+            .allocator = gpa,
+            .kernel_stack = try gpa.alignedAlloc(u8, std.mem.Alignment.@"16", KERNEL_STACK_SIZE),
             .user_stack = user_stack,
             .address_space = address_space,
-            .fs_namespace = try .init(allocator),
+            .fs_namespace = fs_namespace,
             .open_files = .empty,
         };
     }

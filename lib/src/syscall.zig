@@ -60,13 +60,14 @@ pub fn exit(code: u32) void {
     );
 }
 
-pub fn stat(fd: u32, out: *root.fs.Stat) void {
+pub fn stat(path: []const u8, out: *root.fs.Stat) void {
     asm volatile (
         \\ int $0x80
         :
         : [syscall] "{eax}" (Syscall.stat),
-          [_] "{ebx}" (fd),
-          [_] "{ecx}" (out),
+          [_] "{ebx}" (path.ptr),
+          [_] "{ecx}" (path.len),
+          [_] "{edx}" (out),
     );
 }
 

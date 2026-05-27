@@ -36,13 +36,12 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
                 continue;
             };
 
-            const fd = kitty.syscall.open(filename);
-
             var stat: kitty.fs.Stat = undefined;
-            kitty.syscall.stat(fd, &stat);
+            kitty.syscall.stat(filename, &stat);
 
             kitty.println("File: {s} ({s})", .{ filename, @tagName(stat.kind) });
             kitty.println("Size: {Bi:.1} ({} bytes)", .{ stat.size, stat.size });
+            kitty.println("Mountpoint: {s} ({s})", .{ stat.mountpoint[0..stat.mountpoint_len], stat.filesystem[0..stat.filesystem_len] });
         } else if (std.mem.eql(u8, path, "read")) {
             var opt_filename = it.next();
             if (opt_filename) |filename| {
@@ -55,27 +54,36 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
                 continue;
             };
 
-            const fd = kitty.syscall.open(filename);
-
             var stat: kitty.fs.Stat = undefined;
-            kitty.syscall.stat(fd, &stat);
+            kitty.syscall.stat(filename, &stat);
 
             // TODO dynamically allocate buffer
             var read_buffer: [256]u8 = undefined;
 
+            const fd = kitty.syscall.open(filename);
             const bytes_read = kitty.syscall.read(fd, &read_buffer);
-            if (bytes_read == 0) {
+            if (bytes_read != stat.size) {
                 kitty.println("Failed to read", .{});
                 continue;
             }
 
             const data = read_buffer[0..bytes_read];
 
-            if (stat.kind == .directory) {
+            if (stat.kind == .dir) {
                 const entries = std.mem.bytesAsSlice(kitty.fs.DirEntry, data);
                 for (entries) |entry| {
                     const name = entry.name[0..entry.name_len];
-                    kitty.println("{s}", .{name});
+
+                    var full_path_buf: [256]u8 = undefined;
+                    const full_path = std.fmt.bufPrint(&full_path_buf, "{s}/{s}", .{ filename, name }) catch {
+                        kitty.println("Path too long", .{});
+                        continue;
+                    };
+
+                    var entry_stat: kitty.fs.Stat = undefined;
+                    kitty.syscall.stat(full_path, &entry_stat);
+
+                    kitty.println("{s} ({s})", .{ name, @tagName(entry_stat.kind) });
                 }
             } else {
                 kitty.println("{X}", .{data});

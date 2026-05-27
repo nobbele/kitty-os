@@ -4,6 +4,7 @@ pub const lib = @import("lib");
 
 pub const arch = @import("arch/x86/root.zig");
 pub const console = @import("console.zig");
+pub const drivers = @import("drivers/root.zig");
 pub const fs = @import("filesystem/root.zig");
 pub const keyboard = @import("keyboard.zig");
 const main = @import("main.zig");
