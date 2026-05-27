@@ -20,8 +20,9 @@ pub fn kmain(multiboot_info_address: usize) callconv(.{ .x86_sysv = .{} }) noret
     root.terminal.println("[fs] init", .{});
     root.fs.init() catch unreachable;
 
-    root.terminal.println("[serialdrv] init", .{});
+    root.terminal.println("[drv] init", .{});
     root.drivers.serial.init() catch unreachable;
+    root.drivers.terminal.init() catch unreachable;
 
     root.process.init() catch unreachable;
 

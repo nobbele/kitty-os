@@ -32,13 +32,17 @@ pub const Task = struct {
         const fs_dev = try fs_root.fs.ops.create(fs_root, "dev", .dir);
         try fs_namespace.mount(fs_dev, &root.fs.devfs.global_devfs.fs);
 
+        var open_files: root.SparseList(*root.fs.Node) = .empty;
+        try open_files.insert(gpa, 0, @ptrFromInt(0xDEAD0000));
+        try open_files.insert(gpa, 1, root.drivers.terminal.node);
+
         return .{
             .allocator = gpa,
             .kernel_stack = try gpa.alignedAlloc(u8, std.mem.Alignment.@"16", KERNEL_STACK_SIZE),
             .user_stack = user_stack,
             .address_space = address_space,
             .fs_namespace = fs_namespace,
-            .open_files = .empty,
+            .open_files = open_files,
         };
     }
 

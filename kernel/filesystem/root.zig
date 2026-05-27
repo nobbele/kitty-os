@@ -35,8 +35,16 @@ fn syscallWrite(args: syscall.SyscallArgs) syscall.SyscallResult {
     if (fd == 0) return .{ .err = 1 };
     if (fd == 1) return writeStdout(buf);
 
-    // TODO filesystem
-    return .{ .err = 2 };
+    const task = root.scheduler.currentTask();
+    const node: *vfs.Node = task.open_files.array.items[fd] orelse {
+        return .{ .err = 3 };
+    };
+
+    const res = node.ops.write(node, buf, 0) catch {
+        return .{ .err = 4 };
+    };
+
+    return .{ .ok = res };
 }
 
 fn syscallRead(args: syscall.SyscallArgs) syscall.SyscallResult {

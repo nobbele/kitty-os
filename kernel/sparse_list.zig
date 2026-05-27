@@ -25,5 +25,11 @@ pub fn SparseList(comptime T: type) type {
             self.array.items[slot] = item;
             return slot;
         }
+
+        pub fn insert(self: *Self, gpa: Allocator, i: usize, item: T) !void {
+            if (i >= self.array.items.len)
+                try self.array.appendNTimes(gpa, null, i - self.array.items.len + 1);
+            try self.array.insert(gpa, i, item);
+        }
     };
 }

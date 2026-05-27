@@ -6,7 +6,7 @@ const vfs = fs.vfs;
 pub var node: *vfs.Node = undefined;
 
 pub fn init() !void {
-    node = try root.fs.devfs.global_devfs.registerDevice("serial", .{
+    node = try root.fs.devfs.global_devfs.registerDevice("terminal", .{
         .read = &read,
         .write = &write,
         .stat = &stat,
@@ -18,7 +18,7 @@ fn read(_: *vfs.Node, _: []u8, _: usize) vfs.Error!usize {
 }
 
 fn write(_: *vfs.Node, buf: []const u8, _: usize) vfs.Error!usize {
-    root.console.printString(buf);
+    root.terminal.printString(buf);
     return vfs.Error.InvalidOperation;
 }
 
