@@ -13,8 +13,21 @@ pub fn init() !void {
     }, null);
 }
 
-fn read(_: *vfs.Node, _: []u8, _: usize) vfs.Error!usize {
-    return vfs.Error.InvalidOperation;
+fn read(_: *vfs.Node, buf: []u8, _: usize) vfs.Error!usize {
+    var chars_read: usize = 0;
+    while (chars_read < buf.len) {
+        const key = while (true) {
+            if (root.keyboard.tryReadKey()) |k| break k;
+            asm volatile ("sti; hlt");
+        };
+
+        buf[chars_read] = key;
+        chars_read += 1;
+
+        if (key == '\n') break;
+    }
+
+    return chars_read;
 }
 
 fn write(_: *vfs.Node, buf: []const u8, _: usize) vfs.Error!usize {

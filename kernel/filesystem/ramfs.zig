@@ -81,11 +81,14 @@ pub const Ramfs = struct {
 };
 
 pub var image_ramfs: *Ramfs = undefined;
+pub var devfs_node: *RamfsNode = undefined;
 
 pub fn init() !void {
     const gpa = std.heap.page_allocator;
     image_ramfs = try .init(gpa);
     try loadKernelRamfsTar(gpa, &image_ramfs.root_node);
+
+    devfs_node = try create(&image_ramfs.root_node, "dev", .dir);
 }
 
 fn loadKernelRamfsTar(gpa: std.mem.Allocator, root_node: *RamfsNode) !void {
@@ -136,10 +139,10 @@ fn loadKernelRamfsTar(gpa: std.mem.Allocator, root_node: *RamfsNode) !void {
 }
 
 pub fn makeDirRecursive(dir: *RamfsNode, path: []const u8) !*RamfsNode {
-    std.debug.assert(switch (dir.data) {
-        .dir => true,
-        else => false,
-    });
+    switch (dir.data) {
+        .dir => {},
+        else => return error.NotADirectory,
+    }
 
     var current = dir;
     var it = std.mem.splitScalar(u8, path, '/');
@@ -157,10 +160,10 @@ pub fn lookup(origin: *RamfsNode, path: []const u8) vfs.Error!?*RamfsNode {
         switch (current.data) {
             .dir => |entries| current = entries.get(comp) orelse return null,
             .file => if (comp.len == 0) {
-                std.debug.assert(switch (current.data) {
-                    .file => true,
-                    else => false,
-                });
+                switch (current.data) {
+                    .file => {},
+                    else => return vfs.Error.NotAFile,
+                }
                 return current;
             } else return vfs.Error.NotADirectory,
         }

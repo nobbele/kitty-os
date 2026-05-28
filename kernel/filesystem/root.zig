@@ -32,9 +32,6 @@ fn syscallWrite(args: syscall.SyscallArgs) syscall.SyscallResult {
     const buf = buf_ptr[0..len];
     // console.serialPrintln("write({}, 0x{*}, {})", .{ fd, buf, len });
 
-    if (fd == 0) return .{ .err = 1 };
-    if (fd == 1) return writeStdout(buf);
-
     const task = root.scheduler.currentTask();
     const node: *vfs.Node = task.open_files.array.items[fd] orelse {
         return .{ .err = 3 };
@@ -54,15 +51,15 @@ fn syscallRead(args: syscall.SyscallArgs) syscall.SyscallResult {
     const buf = buf_ptr[0..len];
     // console.serialPrintln("read({}, 0x{*}, {})", .{ fd, buf, len });
 
-    if (fd == 0) return readStdin(buf);
-    if (fd == 1) return .{ .err = 1 };
-
     const task = root.scheduler.currentTask();
-    const node = task.open_files.array.items[fd - lib.StdFd.count] orelse {
+    const node = task.open_files.array.items[fd] orelse {
         return .{ .err = 1 };
     };
 
-    const r = node.fs.ops.read(node, buf, 0) catch return .{ .err = 2 };
+    const r = node.ops.read(node, buf, 0) catch |e| {
+        root.console.println("read() Error = {}", .{e});
+        return .{ .err = 2 };
+    };
 
     return .{ .ok = r };
 }
@@ -100,25 +97,9 @@ fn syscallOpen(args: syscall.SyscallArgs) syscall.SyscallResult {
         return .{ .err = 1 };
     };
 
-    const fidx = task.open_files.add(std.heap.page_allocator, node) catch {
+    const fd = task.open_files.add(std.heap.page_allocator, node) catch {
         return .{ .err = 3 };
     };
 
-    return .{ .ok = fidx + lib.StdFd.count };
-}
-
-fn writeStdout(buf: []const u8) syscall.SyscallResult {
-    root.terminal.printString(buf);
-    return .{ .ok = buf.len };
-}
-
-fn readStdin(buf: []u8) syscall.SyscallResult {
-    var chars_read: usize = 0;
-    while (root.keyboard.tryReadKey()) |key| {
-        buf[chars_read] = key;
-        chars_read += 1;
-
-        if (chars_read >= buf.len) break;
-    }
-    return .{ .ok = chars_read };
+    return .{ .ok = fd };
 }

@@ -19,10 +19,11 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
     while (true) {
         kitty.print(">", .{});
         const read = kitty.readLine(&buffer) catch 0;
-        const cmdline = buffer[0..read];
+        const cmdline = std.mem.trim(u8, buffer[0..read], &[_]u8{' '});
 
         var it = std.mem.splitScalar(u8, cmdline, ' ');
         const path = it.next() orelse continue;
+        if (path.len == 0) continue;
         // const args = it.rest();
         if (std.mem.eql(u8, path, "stat")) {
             var opt_filename = it.next();
@@ -61,11 +62,12 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
             var read_buffer: [256]u8 = undefined;
 
             const fd = kitty.syscall.open(filename);
-            const bytes_read = kitty.syscall.read(fd, &read_buffer);
-            if (bytes_read != stat.size) {
-                kitty.println("Failed to read", .{});
+            const result = kitty.syscall.read(fd, &read_buffer);
+            if (result < 0) {
+                kitty.println("Failed to read: {}", .{result});
                 continue;
             }
+            const bytes_read: usize = @intCast(result);
 
             const data = read_buffer[0..bytes_read];
 
@@ -86,10 +88,14 @@ export fn main() callconv(.{ .x86_sysv = .{} }) void {
                     kitty.println("{s} ({s})", .{ name, @tagName(entry_stat.kind) });
                 }
             } else {
-                kitty.println("{X}", .{data});
+                kitty.println("{s}", .{data});
             }
         } else {
-            kitty.syscall.exec(path);
+            const res = kitty.syscall.exec(path);
+            if (res < 0) {
+                kitty.println("Failed to execute '{s}'", .{path});
+                continue;
+            }
         }
 
         // TODO wait for processes

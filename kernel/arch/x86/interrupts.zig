@@ -148,10 +148,7 @@ fn dispatchSyscall(frame: *idt.InterruptFrame) void {
     // Put error in a specific user-accessible memory location like errno.
     frame.eax = switch (result) {
         .ok => |v| v,
-        else => 0,
-    };
-    frame.edx = switch (result) {
-        .err => |e| e,
+        .err => |e| @bitCast(-@as(isize, @bitCast(e))),
         else => 0,
     };
 }

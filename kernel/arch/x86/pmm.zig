@@ -189,13 +189,13 @@ pub fn alloc(size: usize) !usize {
     return error.OutOfMemory;
 }
 
-pub fn free(address: usize, size: usize) !void {
+pub fn free(address: usize, size: usize) void {
     const start_page = address / root.PAGE_SIZE;
     const page_count = divRoundUp(size, root.PAGE_SIZE);
 
     if (page_count >= bitmap.len * @bitSizeOf(BitmapUnit)) {
         console.println("[pmm] Failed free {Bi:.1} bytes at 0x{X:.1}", .{ size, address });
-        return error.OutOfRange;
+        return;
     }
 
     for (start_page..start_page + page_count) |page| {

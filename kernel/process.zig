@@ -24,16 +24,19 @@ pub const Task = struct {
     pub fn init() !Task {
         const gpa = std.heap.page_allocator;
 
+        console.println("[task] Loading address space, user stack", .{});
         const address_space = try vmm.AddressSpace.init();
         const user_stack = try Stack.init(&address_space);
+
+        console.println("[task] Setting up filesystem", .{});
         var fs_namespace = try root.fs.vfs.Namespace.init(gpa);
 
-        var fs_root = try fs_namespace.lookup("/") orelse unreachable;
-        const fs_dev = try fs_root.fs.ops.create(fs_root, "dev", .dir);
-        try fs_namespace.mount(fs_dev, &root.fs.devfs.global_devfs.fs);
+        console.println("[task] Mounting devfs", .{});
+        try fs_namespace.mount(&root.fs.ramfs.devfs_node.node, &root.fs.devfs.global_devfs.fs);
 
+        console.println("[task] Setting up stdio", .{});
         var open_files: root.SparseList(*root.fs.Node) = .empty;
-        try open_files.insert(gpa, 0, @ptrFromInt(0xDEAD0000));
+        try open_files.insert(gpa, 0, root.drivers.terminal.node);
         try open_files.insert(gpa, 1, root.drivers.terminal.node);
 
         return .{
@@ -46,9 +49,9 @@ pub const Task = struct {
         };
     }
 
-    pub fn free(self: *Task) !void {
-        try self.address_space.free();
-        try self.user_stack.free();
+    pub fn free(self: *Task) void {
+        self.address_space.free();
+        self.user_stack.free();
         // self.allocator.free(self.kernel_stack);
     }
 
@@ -105,16 +108,19 @@ pub fn exit(code: u32) !void {
 }
 
 pub fn exec(path: []const u8) !*Task {
+    const gpa = std.heap.page_allocator;
     console.println("[proc] Executing '{s}'", .{path});
 
     console.println("[proc] Creating user task", .{});
-    const task = try std.heap.page_allocator.create(Task);
+    const task = try gpa.create(Task);
     task.* = try .init();
+    errdefer task.free();
 
     console.println("[proc] Finding '{s}'", .{path});
     const file_node = try task.fs_namespace.lookup(path) orelse return error.NotFound;
     const file_stat = try file_node.fs.ops.stat(file_node);
-    const data = try std.heap.page_allocator.alignedAlloc(u8, .@"4", file_stat.size);
+    const data = try gpa.alignedAlloc(u8, .@"4", file_stat.size);
+    errdefer gpa.free(data);
     {
         const bytes_read = try file_node.fs.ops.read(file_node, data, 0);
         if (bytes_read != data.len) {
@@ -125,7 +131,8 @@ pub fn exec(path: []const u8) !*Task {
 
     console.println("[proc] Loading ELF header", .{});
     const header: *const std.elf.Elf32.Ehdr = @ptrCast(@alignCast(data.ptr));
-    std.debug.assert(std.mem.eql(u8, header.ident[0..4], "\x7fELF"));
+    if (!std.mem.eql(u8, header.ident[0..4], "\x7fELF"))
+        return error.InvalidElf;
 
     const program_headers_ptr: [*]align(1) const std.elf.Elf32.Phdr = @ptrCast(@alignCast(data.ptr + header.phoff));
     const program_headers = program_headers_ptr[0..header.phnum];
@@ -211,7 +218,7 @@ const Stack = struct {
         };
     }
 
-    pub fn free(self: *Stack) !void {
-        try pmm.free(self.phys_start, self.size);
+    pub fn free(self: *Stack) void {
+        pmm.free(self.phys_start, self.size);
     }
 };

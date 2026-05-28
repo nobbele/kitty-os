@@ -30,5 +30,5 @@ fn free(ctx: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: u
     _ = ret_addr;
     _ = alignment;
     const addr = @intFromPtr(memory.ptr) - root.KERNEL_BASE;
-    pmm.free(addr, memory.len) catch {};
+    pmm.free(addr, memory.len);
 }
